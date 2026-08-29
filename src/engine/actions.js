@@ -1,12 +1,16 @@
 // The functional core of TOKUI, shaped as an action log.
 //
-// Every mutation is a named action `{ type, payload, at }` folded through
-// `apply` — pure: state in, state out, no mutation, no IO, no Math.random,
-// no Date. `at` is a local ISO datetime ("YYYY-MM-DDTHH:MM:SS") stamped by
-// the shell. Ids come from a counter. The payoff: today the shell persists
-// the log in the browser and folds it on load; in milestone 2 clients queue
-// the same actions offline and a server replays them through this exact
-// module — the log is the sync protocol.
+// Every mutation is a named action `{ id, type, payload, at }` folded
+// through `apply` — pure: state in, state out, no mutation, no IO, no
+// Math.random, no Date. `at` is a local ISO datetime ("YYYY-MM-DDTHH:MM:SS")
+// and `id` a device-unique string ("<deviceId>-<counter>"), both stamped by
+// the shell. Entities created by an action derive their ids from it: the
+// primary entity takes action.id, parsed items take "<action.id>.1", ".2"…
+// — so devices working offline can never mint colliding ids, and the
+// action id doubles as the sync idempotency key. The shell persists the
+// log in the browser and folds it on load; sync (milestone 2) queues the
+// same actions for a server that replays them through this exact module —
+// the log is the protocol.
 //
 // Retire, don't delete: items and lists leave the working screens but their
 // history stays. Renames keep ids, so history follows the item.
@@ -18,11 +22,21 @@ export const LIST_TYPES = ["tokui", "growth"]; // exploit list / explore-and-gro
 export const TAP_KINDS = ["try", "hit"]; // a hit implies the attempt — one tap per event
 
 export function initState() {
-  return { version: 2, lists: [], sessions: [], nextId: 1 };
+  return { version: 2, lists: [], sessions: [] };
 }
 
 const fail = (msg) => {
   throw new Error(msg);
+};
+
+// A new entity's id must be fresh across every kind of entity — collisions
+// fail loudly rather than silently overwrite.
+const claimId = (s, id) => {
+  const taken =
+    s.sessions.some((x) => x.id === id) ||
+    s.lists.some((l) => l.id === id || l.items.some((it) => it.id === id));
+  if (taken) fail(`id ${id} already exists`);
+  return id;
 };
 
 const clean = (v, label, { required = false, max = 200 } = {}) => {
@@ -72,21 +86,20 @@ const patchSession = (s, id, fn) => ({
 
 const handlers = {
   // --- mission lists -------------------------------------------------------
-  createList(s, { name, type, lines }, at) {
+  createList(s, { name, type, lines }, at, id) {
     const listName = clean(name, "list name", { required: true, max: 80 });
     if (!LIST_TYPES.includes(type)) fail(`unknown list type: ${type}`);
     const parsed = parseLines(lines || "");
-    let nextId = s.nextId;
-    const items = parsed.map((p) => makeItem(nextId++, p, at));
+    const items = parsed.map((p, i) => makeItem(claimId(s, `${id}.${i + 1}`), p, at));
     const list = {
-      id: nextId++,
+      id: claimId(s, id),
       name: listName,
       type,
       createdAt: at,
       archivedAt: null,
       items,
     };
-    return { ...s, nextId, lists: [...s.lists, list] };
+    return { ...s, lists: [...s.lists, list] };
   },
 
   renameList(s, { listId, name }) {
@@ -105,13 +118,12 @@ const handlers = {
     return patchList(s, listId, (l) => ({ ...l, archivedAt: null }));
   },
 
-  addLines(s, { listId, lines }, at) {
+  addLines(s, { listId, lines }, at, id) {
     getList(s, listId);
     const parsed = parseLines(lines || "");
     if (parsed.length === 0) fail("nothing to add");
-    let nextId = s.nextId;
-    const items = parsed.map((p) => makeItem(nextId++, p, at));
-    return { ...patchList(s, listId, (l) => ({ ...l, items: [...l.items, ...items] })), nextId };
+    const items = parsed.map((p, i) => makeItem(claimId(s, `${id}.${i + 1}`), p, at));
+    return patchList(s, listId, (l) => ({ ...l, items: [...l.items, ...items] }));
   },
 
   // Retitling keeps the id, so the item's whole tally history follows it.
@@ -150,17 +162,17 @@ const handlers = {
   },
 
   // --- sessions ------------------------------------------------------------
-  startSession(s, _p, at) {
+  startSession(s, _p, at, id) {
     if (openSession(s)) fail("a session is already rolling");
     const session = {
-      id: s.nextId,
+      id: claimId(s, id),
       date: dateOf(at),
       startedAt: at,
       endedAt: null,
       note: "",
       taps: [], // { itemId, kind } in tap order — the source of truth for tallies
     };
-    return { ...s, nextId: s.nextId + 1, sessions: [...s.sessions, session] };
+    return { ...s, sessions: [...s.sessions, session] };
   },
 
   endSession(s, { sessionId }, at) {
@@ -170,18 +182,18 @@ const handlers = {
   },
 
   // A session logged after the fact — same shape, just never "open".
-  createSession(s, { date }, at) {
+  createSession(s, { date }, at, id) {
     const d = date || dateOf(at);
     if (!isISODate(d)) fail(`bad session date: ${date}`);
     const session = {
-      id: s.nextId,
+      id: claimId(s, id),
       date: d,
       startedAt: null,
       endedAt: at,
       note: "",
       taps: [],
     };
-    return { ...s, nextId: s.nextId + 1, sessions: [...s.sessions, session] };
+    return { ...s, sessions: [...s.sessions, session] };
   },
 
   deleteSession(s, { sessionId }) {
@@ -250,8 +262,9 @@ function makeItem(id, parsed, at) {
 }
 
 export function apply(state, action) {
+  if (typeof action.id !== "string" || !action.id) fail("action id is required");
   const h = handlers[action.type] || fail(`unknown action: ${action.type}`);
-  return h(state, action.payload || {}, action.at);
+  return h(state, action.payload || {}, action.at, action.id);
 }
 
 export const fold = (log) => log.reduce(apply, initState());

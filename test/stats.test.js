@@ -5,7 +5,8 @@ import { monthGrid, addMonths } from "../src/engine/dates.js";
 
 // 2026-08-29 is a Saturday.
 const TODAY = "2026-08-29";
-const act = (type, payload, at) => ({ type, payload, at: at || `${TODAY}T12:00:00` });
+let seq = 0;
+const act = (type, payload, at) => ({ id: `st${++seq}`, type, payload, at: at || `${TODAY}T12:00:00` });
 
 // Build a state with a list and a closed session per date, tapping per spec:
 // taps = { date: [[kind, times]...] } on the single item.

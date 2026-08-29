@@ -28,16 +28,17 @@ describe("the action log, under arbitrary legal histories", () => {
     }));
   });
 
-  it("ids never collide and never reach nextId", () => {
+  it("entity ids never collide, and all derive from action ids", () => {
     fc.assert(fc.property(arbSeeds, (seeds) => {
-      const { state } = playSeeds(initState(), seeds);
+      const { state, log } = playSeeds(initState(), seeds);
       const ids = [
         ...state.lists.map((l) => l.id),
         ...state.lists.flatMap((l) => l.items.map((it) => it.id)),
         ...state.sessions.map((s) => s.id),
       ];
       expect(new Set(ids).size).toBe(ids.length);
-      for (const id of ids) expect(id).toBeLessThan(state.nextId);
+      const actionIds = new Set(log.map((a) => a.id));
+      for (const id of ids) expect(actionIds.has(id.split(".")[0])).toBe(true);
     }));
   });
 
@@ -57,11 +58,12 @@ describe("the action log, under arbitrary legal histories", () => {
       fc.pre(open !== null && live.length > 0);
       const at = `${TODAY}T12:00:00`;
       const tapped = apply(deepFreeze(state), {
+        id: "x-tap",
         type: "tap",
         payload: { sessionId: open.id, itemId: live[n % live.length].id, kind: hit ? "hit" : "try" },
         at,
       });
-      const undone = apply(tapped, { type: "undoTap", payload: { sessionId: open.id }, at });
+      const undone = apply(tapped, { id: "x-undo", type: "undoTap", payload: { sessionId: open.id }, at });
       expect(undone).toEqual(state);
     }));
   });
@@ -74,8 +76,8 @@ describe("the action log, under arbitrary legal histories", () => {
       const sid = state.sessions[n % state.sessions.length].id;
       const itemId = items[n % items.length].id;
       const at = `${TODAY}T12:00:00`;
-      const up = apply(deepFreeze(state), { type: "adjustTap", payload: { sessionId: sid, itemId, kind: "hit", delta: d }, at });
-      const down = apply(up, { type: "adjustTap", payload: { sessionId: sid, itemId, kind: "hit", delta: -d }, at });
+      const up = apply(deepFreeze(state), { id: "x-up", type: "adjustTap", payload: { sessionId: sid, itemId, kind: "hit", delta: d }, at });
+      const down = apply(up, { id: "x-down", type: "adjustTap", payload: { sessionId: sid, itemId, kind: "hit", delta: -d }, at });
       for (const [a, b] of state.sessions.map((s, i) => [s, down.sessions[i]]))
         expect(tallies(b)).toEqual(tallies(a));
     }));
@@ -151,7 +153,7 @@ describe("stats, under arbitrary legal histories", () => {
     fc.assert(fc.property(arbSeeds, fc.nat({ max: 27 }), (seeds, day) => {
       const { state } = playSeeds(initState(), seeds);
       const date = addDays(BASE_DAY, day);
-      const more = apply(deepFreeze(state), { type: "createSession", payload: { date }, at: `${date}T12:00:00` });
+      const more = apply(deepFreeze(state), { id: "x-extra", type: "createSession", payload: { date }, at: `${date}T12:00:00` });
       expect(weeklyStreak(more, TODAY)).toBeGreaterThanOrEqual(weeklyStreak(state, TODAY));
     }));
   });
@@ -219,8 +221,8 @@ describe("the seed driver", () => {
   it("every non-null action applies cleanly", () => {
     fc.assert(fc.property(arbSeeds, (seeds) => {
       let state = initState();
-      for (const seed of seeds) {
-        const action = actionFromSeed(state, seed);
+      for (let i = 0; i < seeds.length; i++) {
+        const action = actionFromSeed(state, seeds[i], `d${i}`);
         if (action) state = apply(state, action); // throws = property fails
       }
     }));
