@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
-import { makePgDb } from "../server/db-pg.js";
+import { makePgDb, pickDatabaseUrl } from "../server/db-pg.js";
 import { makeReferee } from "../server/referee.js";
 
 let refereePromise = null;
@@ -14,8 +14,9 @@ let refereePromise = null;
 function getReferee() {
   if (!refereePromise) {
     refereePromise = (async () => {
-      if (!process.env.DATABASE_URL) throw new Error("no database");
-      const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 3 });
+      const url = pickDatabaseUrl(process.env);
+      if (!url) throw new Error("no database");
+      const pool = new pg.Pool({ connectionString: url, max: 3 });
       const schema = readFileSync(join(process.cwd(), "server", "schema.sql"), "utf8");
       await pool.query(schema);
       return makeReferee(makePgDb(pool));
