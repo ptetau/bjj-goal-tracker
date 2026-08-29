@@ -74,7 +74,7 @@ same account merge for free, because tally actions commute.
 ```
 npm install
 npm run dev       # Vite dev server
-npm test          # engine tests (vitest)
+npm test          # engine tests: examples + fast-check properties (vitest)
 npm run build     # static PWA in dist/
 ```
 

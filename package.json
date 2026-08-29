@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "fast-check": "^3.23.2",
     "vite": "^6.0.7",
     "vitest": "^2.1.8"
   }
