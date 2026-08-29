@@ -1,0 +1,23 @@
+# The gate. PRs merge automatically once this is green (see CLAUDE.md:
+# the suite is the reviewer), so everything that matters must run here:
+# the example suites, the fast-check properties, the referee against
+# in-process Postgres, and the production build.
+
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

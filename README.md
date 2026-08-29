@@ -6,9 +6,10 @@ possible with gassed hands between rolls: two fat zones per item (**TRY** /
 **HIT**, a hit implies the attempt), one giant **UNDO**, a buzz and a flash on
 every count.
 
-This is **milestone 1: the offline core**, an installable PWA that works with
-no signal and keeps everything on the device. Milestone 2 adds the single-gym
-server behind it (see [docs/SPEC.md](docs/SPEC.md)).
+An installable PWA that works with no signal and keeps everything on the
+device — plus **device sync** (milestone 2.1): turn sync on, carry the code
+to your other device, and phone + laptop converge on one training log.
+Accounts and the coach layer come next (see [docs/SPEC.md](docs/SPEC.md)).
 
 ### Mission lists
 
@@ -51,31 +52,44 @@ manually; sessions are freeform, several per day if you trained twice.
 
 ## Architecture
 
-A functional core with one thin shell, after the pattern of
+A functional core with thin shells, after the pattern of
 [OVERTYPE](https://github.com/ptetau/overtype) — but the core is shaped as an
 **action log**:
 
 ```
 src/engine/   pure rules — no IO, no Math.random, no Date. Every mutation is
-              a named action {type, payload, at} folded through apply().
-src/app/      the shell: the clock (nowISO) and the disk (the log persists
-              to localStorage and replays on load).
+              a named action {id, type, payload, at} folded through apply();
+              entities derive their ids from the action's device-unique id.
+src/app/      the client shell: clock, device identity, the persisted
+              document (server log prefix + pending queue), the sync driver.
 src/ui/       React components + one stylesheet.
+api/          shell #1: the sync referee as a Vercel function (Postgres).
+server/       shell #2: the same referee as a long-lived node server,
+              serving the built app (PGlite fallback without DATABASE_URL).
 public/       PWA: manifest, service worker (offline app shell), icons.
 ```
 
-The log is the point: in milestone 2, clients queue these same actions
-offline and a serverless referee replays them through this exact engine into
-Postgres — persistence and sync are the same shape. Two phones tallying the
-same account merge for free, because tally actions commute.
+The log IS the sync protocol: clients queue actions offline; the referee
+authenticates the tracker, replays incoming actions through the same engine,
+sequences the valid ones into an append-only Postgres log, and returns
+everything after the client's cursor. Devices converge because ids can't
+collide (they derive from per-device action ids) and tally actions commute.
+Local truth is always `fold(serverPrefix ++ pending)` — the offline app is
+just the degenerate case with an empty server prefix.
 
 ## Running it
 
 ```
 npm install
-npm run dev       # Vite dev server
-npm test          # engine tests: examples + fast-check properties (vitest)
+npm run dev       # Vite dev server (no sync endpoint)
+npm test          # engine + referee tests: examples, fast-check properties,
+                  #   and the referee against in-process Postgres (PGlite)
+npm run start     # build + serve app AND sync locally (PGlite, ./.data)
 npm run build     # static PWA in dist/
+npm run db:migrate  # apply server/schema.sql to DATABASE_URL
 ```
 
-Deploys anywhere that serves static files; `vercel.json` is included.
+Deploying to Vercel: the static app plus `api/sync.js` deploy together;
+set `DATABASE_URL` (a pooled Postgres connection string — Neon/Vercel
+Postgres) in the project's environment variables. Without it the app still
+works, just without sync.

@@ -35,10 +35,10 @@ student and coach both.
 
 | Question | Decision |
 | --- | --- |
-| Build order | **M1: offline core** (this) → M2: server. |
+| Build order | M1: offline core ✅ → **M2.1: device sync ✅ (anonymous trackers)** → M2.2: accounts → M2.3: coach layer. |
 | Offline | Installable PWA; taps land locally and instantly. |
-| State | Everything is an **action log**: `{type, payload, at}` folded through a pure engine (no Date, no randomness, counter ids). |
-| Sync (M2) | Action-log sync: clients queue the same actions offline; a serverless endpoint replays them through the same engine into **Postgres** (Neon/Vercel). Tally actions commute, so concurrent devices merge; list edits get one merge policy. |
+| State | Everything is an **action log**: `{id, type, payload, at}` folded through a pure engine (no Date, no randomness). Action ids are `<deviceId>-<counter>`; created entities derive ids from them, so devices can't collide. |
+| Sync | ✅ Action-log sync: clients queue the same actions offline; the referee (`server/referee.js`, one endpoint at `/api/sync`) replays them through the same engine into an append-only **Postgres** log, idempotent by action id, per-tracker serialized. Pre-auth, a "tracker" is named by a sync code (`trackerId.secret`) carried between devices; M2.2 accounts absorb it. Rejected actions (engine says no against server truth) are named and dropped client-side. |
 | Auth (M2) | **Passkey** primary, **magic-link email** fallback/enrollment (one transactional-email provider, e.g. Resend; dev fallback prints the link). |
 | Hosting | Static PWA now (Vercel config included); M2 adds `api/` serverless functions in the same deploy. |
 

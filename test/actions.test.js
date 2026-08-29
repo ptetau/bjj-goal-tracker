@@ -10,7 +10,8 @@ import {
 } from "../src/engine/actions.js";
 
 const AT = "2026-08-29T19:30:00";
-const act = (type, payload, at = AT) => ({ type, payload, at });
+let seq = 0;
+const act = (type, payload, at = AT) => ({ id: `t${++seq}`, type, payload, at });
 
 // A state with one tokui list (2 items) and one growth list (1 item).
 const base = fold([

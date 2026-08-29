@@ -57,6 +57,22 @@ html, body {
 }
 .masthead h1 span { color: var(--gold); font-weight: 400; font-size: 1.2rem; }
 
+.sync-chip {
+  float: right;
+  font-size: 0.9rem;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--mat-deep);
+  border: 1px solid var(--line);
+  color: var(--chalk-dim);
+}
+.sync-ok { color: #7fbf8e; border-color: #7fbf8e; }
+.sync-busy { color: var(--gold-hi); border-color: var(--gold-hi); }
+.sync-bad { color: #e08585; border-color: #e08585; }
+
+.sync-err { color: var(--red); font-weight: 600; margin-top: 10px; }
+.sheet input { font: inherit; padding: 9px; border: 1px solid var(--gi-shade); border-radius: 6px; background: var(--gi-hi); color: var(--ink); width: 100%; }
+
 nav[role="tablist"] { display: flex; gap: 2px; border-bottom: 1px solid var(--line); }
 
 .tab {

@@ -39,14 +39,15 @@ export const arbOpSeed = fc.record({
 const pick = (arr, n) => (arr.length ? arr[n % arr.length] : null);
 
 // Turn one seed into a valid action for this state, or null when the op has
-// no legal target yet (no lists, no open session, ...).
-export function actionFromSeed(state, { op, a, b, c }) {
+// no legal target yet (no lists, no open session, ...). `id` must be unique
+// within the run — playSeeds stamps one per seed.
+export function actionFromSeed(state, { op, a, b, c }, id) {
   const at = `${addDays(BASE_DAY, c)}T12:00:00`;
   const lists = state.lists;
   const items = lists.flatMap((l) => l.items);
   const sessions = state.sessions;
   const open = sessions.find((s) => s.endedAt === null) || null;
-  const act = (type, payload) => ({ type, payload, at });
+  const act = (type, payload) => ({ id, type, payload, at });
 
   switch (op) {
     case 0:
@@ -109,8 +110,8 @@ export function actionFromSeed(state, { op, a, b, c }) {
 export function playSeeds(initial, seeds) {
   let state = deepFreeze(initial);
   const log = [];
-  for (const seed of seeds) {
-    const action = actionFromSeed(state, seed);
+  for (let i = 0; i < seeds.length; i++) {
+    const action = actionFromSeed(state, seeds[i], `s${i}`);
     if (!action) continue;
     state = deepFreeze(apply(state, action));
     log.push(action);

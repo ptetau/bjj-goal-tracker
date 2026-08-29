@@ -36,6 +36,15 @@ npm run dev       # Vite dev server (SW disabled in dev)
 npm run build     # static PWA in dist/
 ```
 
+## Merge policy: green means merge
+
+PRs on this repo merge automatically once CI (`.github/workflows/ci.yml`)
+is green — no human review gate. The suite IS the reviewer. That policy is
+the entire reason the discipline below is non-negotiable: a test written
+red-first and a property quantifying over arbitrary histories are what
+stand between a push and main. Never weaken a test to get green; if CI is
+red, the change is wrong until proven otherwise.
+
 ## Development discipline: TDD with property-based testing
 
 This repo is developed test-first, and engine work is **property-first**.

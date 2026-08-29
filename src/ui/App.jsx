@@ -1,11 +1,13 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { apply, openSession } from "../engine/actions.js";
-import { loadLog, loadState, nowISO, saveLog } from "../app/store.js";
+import { foldDoc, loadDoc, newActionId, nowISO, saveDoc } from "../app/store.js";
+import { syncDoc } from "../app/sync.js";
 import Missions from "./Missions.jsx";
 import Roll from "./Roll.jsx";
 import Grid from "./Grid.jsx";
 import Calendar from "./Calendar.jsx";
 import SessionEditor from "./SessionEditor.jsx";
+import SyncSheet from "./SyncSheet.jsx";
 
 const TABS = [
   { id: "roll", label: "Roll" },
@@ -15,26 +17,34 @@ const TABS = [
 ];
 
 export default function App() {
-  const logRef = useRef(null);
-  if (logRef.current === null) logRef.current = loadLog();
-  const [state, setState] = useState(() => loadState(logRef.current));
+  const initial = useMemo(() => foldDoc(loadDoc()), []);
+  const [doc, setDoc] = useState(initial.doc);
+  const [state, setState] = useState(initial.state);
   const [tab, setTab] = useState(() =>
-    openSession(loadState(logRef.current)) || loadState(logRef.current).lists.length
-      ? "roll"
-      : "missions"
+    openSession(initial.state) || initial.state.lists.length ? "roll" : "missions"
   );
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null); // session id under the editor overlay
+  const [showSync, setShowSync] = useState(false);
+  const [syncInfo, setSyncInfo] = useState({ status: "idle" });
 
-  // Dispatch stamps the action, folds it through the pure engine, and
-  // appends it to the persisted log — errors surface in one banner.
+  const docRef = useRef(doc);
+  docRef.current = doc;
+  const inFlight = useRef(false);
+
+  const commit = (nextDoc, nextState) => {
+    setDoc(nextDoc);
+    saveDoc(nextDoc);
+    if (nextState) setState(nextState);
+  };
+
+  // Dispatch stamps the action (device-unique id + local time), folds it
+  // through the pure engine, and queues it for sync.
   const dispatch = (type, payload) => {
-    const action = { type, payload, at: nowISO() };
+    const action = { id: newActionId(), type, payload, at: nowISO() };
     try {
       const next = apply(state, action);
-      logRef.current = [...logRef.current, action];
-      saveLog(logRef.current);
-      setState(next);
+      commit({ ...docRef.current, pending: [...docRef.current.pending, action] }, next);
       setError(null);
       return next;
     } catch (e) {
@@ -43,14 +53,70 @@ export default function App() {
     }
   };
 
-  const live = useMemo(() => openSession(state), [state]);
-  const props = { state, dispatch, live, setEditing };
+  // Push pending, pull the rest of the log, refold. Actions dispatched while
+  // a sync is in flight are re-attached before folding, so nothing is lost.
+  const runSync = async () => {
+    const base = docRef.current;
+    if (inFlight.current || !base.tracker) return;
+    inFlight.current = true;
+    setSyncInfo({ status: "syncing" });
+    const merged = await syncDoc(base);
+    inFlight.current = false;
+    if (!merged) {
+      setSyncInfo({ status: "offline" });
+      return;
+    }
+    const inBase = new Set(base.pending.map((a) => a.id));
+    const addedMeanwhile = docRef.current.pending.filter((a) => !inBase.has(a.id));
+    const { state: nextState, doc: nextDoc } = foldDoc({
+      ...merged,
+      pending: [...merged.pending, ...addedMeanwhile],
+    });
+    commit(nextDoc, nextState);
+    setSyncInfo({ status: "ok", at: nowISO() });
+    if (nextDoc.pending.length > 0) setTimeout(runSync, 500); // flush what arrived mid-flight
+  };
+
+  useEffect(() => {
+    runSync();
+    const onVisible = () => document.visibilityState === "visible" && runSync();
+    window.addEventListener("online", runSync);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("online", runSync);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debounced push after activity — matside taps sync themselves in the gaps.
+  useEffect(() => {
+    if (!doc.tracker || doc.pending.length === 0) return;
+    const t = setTimeout(runSync, 1500);
+    return () => clearTimeout(t);
+  }, [doc]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const setTracker = (tracker, { rebase } = {}) => {
+    // Linking to another tracker rebases this device's whole history as
+    // pending, so its data merges into the shared log on the next sync.
+    const base = docRef.current;
+    const next = rebase
+      ? { ...base, tracker, server: [], cursor: 0, pending: [...base.server, ...base.pending] }
+      : { ...base, tracker };
+    commit(next);
+    setTimeout(runSync, 0);
+  };
+
+  const dot =
+    !doc.tracker ? "off" : syncInfo.status === "offline" ? "bad" : doc.pending.length ? "busy" : "ok";
 
   return (
     <div className="app">
       <header className="masthead">
         <h1>
           TOKUI <span>得意</span>
+          <button className={`sync-chip sync-${dot}`} onClick={() => setShowSync(true)} aria-label="Sync status">
+            ⇅{doc.pending.length > 0 && doc.tracker ? ` ${doc.pending.length}` : ""}
+          </button>
         </h1>
         <nav role="tablist" aria-label="Sections">
           {TABS.map((t) => (
@@ -62,7 +128,7 @@ export default function App() {
               onClick={() => setTab(t.id)}
             >
               {t.label}
-              {t.id === "roll" && live && <span className="live-dot" aria-label="session in progress" />}
+              {t.id === "roll" && openSession(state) && <span className="live-dot" aria-label="session in progress" />}
             </button>
           ))}
         </nav>
@@ -78,18 +144,22 @@ export default function App() {
       )}
 
       <main>
-        {tab === "roll" && <Roll {...props} />}
-        {tab === "missions" && <Missions {...props} />}
-        {tab === "grid" && <Grid {...props} />}
-        {tab === "calendar" && <Calendar {...props} />}
+        {tab === "roll" && <Roll state={state} dispatch={dispatch} live={openSession(state)} setEditing={setEditing} />}
+        {tab === "missions" && <Missions state={state} dispatch={dispatch} />}
+        {tab === "grid" && <Grid state={state} />}
+        {tab === "calendar" && <Calendar state={state} dispatch={dispatch} setEditing={setEditing} />}
       </main>
 
       {editing !== null && (
-        <SessionEditor
-          state={state}
-          dispatch={dispatch}
-          sessionId={editing}
-          onClose={() => setEditing(null)}
+        <SessionEditor state={state} dispatch={dispatch} sessionId={editing} onClose={() => setEditing(null)} />
+      )}
+      {showSync && (
+        <SyncSheet
+          doc={doc}
+          syncInfo={syncInfo}
+          setTracker={setTracker}
+          runSync={runSync}
+          onClose={() => setShowSync(false)}
         />
       )}
     </div>
