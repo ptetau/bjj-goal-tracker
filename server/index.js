@@ -7,7 +7,7 @@ import { createServer } from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { makeReferee } from "./referee.js";
-import { makePgDb } from "./db-pg.js";
+import { makePgDb, pickDatabaseUrl } from "./db-pg.js";
 
 const PORT = process.env.PORT || 8787;
 const DIST = join(process.cwd(), "dist");
@@ -23,9 +23,10 @@ const MIME = {
 const schema = readFileSync(new URL("./schema.sql", import.meta.url), "utf8");
 
 async function makeDb() {
-  if (process.env.DATABASE_URL) {
+  const url = pickDatabaseUrl(process.env);
+  if (url) {
     const { default: pg } = await import("pg");
-    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
+    const pool = new pg.Pool({ connectionString: url, max: 5 });
     await pool.query(schema);
     return makePgDb(pool);
   }
