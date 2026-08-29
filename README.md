@@ -1,61 +1,81 @@
-# BJJ GOAL TRACKER
+# TOKUI 得意
 
-Set jiu-jitsu goals, log your mat time, and watch the belt fill in. Everything
-lives in your browser — no account, no server, no telemetry. Your whole
-history is one JSON document in localStorage.
+Mission lists for the mat. A coach or student writes a list of *tokui waza* —
+the techniques to hit every rolling session — and the app makes tallying them
+possible with gassed hands between rolls: two fat zones per item (**TRY** /
+**HIT**, a hit implies the attempt), one giant **UNDO**, a buzz and a flash on
+every count.
 
-### Goals come in four shapes
+This is **milestone 1: the offline core**, an installable PWA that works with
+no signal and keeps everything on the device. Milestone 2 adds the single-gym
+server behind it (see [docs/SPEC.md](docs/SPEC.md)).
 
-| Type | Measures | Progress comes from |
-| --- | --- | --- |
-| **sessions** | train N times | tagging the goal when you log a session |
-| **hours** | N hours on the mat | the minutes of tagged sessions |
-| **count** | N of anything — reps, subs, comps | the **+1 / +10** buttons on the goal |
-| **milestone** | done or not | you saying so |
+### Mission lists
 
-Sessions- and hours-goals never store progress: they *read it off the
-training log*. Delete a session and every goal it fed rolls back by itself.
-Deadlines are optional; a goal that has one shows the days remaining and
-turns red when it's behind you.
+Two kinds, one model:
 
-### Mat time
+- **tokui** — the exploit list: weapons you hit every session to stay sharp.
+- **growth** — the explore list: what you're adding. Going for it is the win,
+  so its sharpness leads with attempt-consistency instead of hits.
 
-Log a session with a date, minutes, and a kind — gi, no-gi, drilling, open
-mat, competition, or private — plus notes and the goals it counts toward.
-The log view tracks the week in progress against your sessions-per-week aim.
+Lists are authored as text, one item per line. The parser structures what it
+can and keeps the rest verbatim — nothing is ever rejected:
 
-### Journey
+```
+Bottom => top
+Back => strangle | arm bar
+Top => pinning: tight weight and balance
+Leg => inside heel x25          ← optional cumulative target
+```
 
-Your belt, drawn as a belt: rank colour, black tab (red once you're a black
-belt), stripes on the tab. Setting a new rank appends to a promotion
-history. Below it: lifetime sessions and mat hours, your unbroken-weeks
-streak, weeks on target, and an eight-week bar chart — bars that hit the
-weekly aim glow green. Training weeks run Monday–Sunday, and the week in
-progress can't break a streak: you may just not have trained *yet*.
+Items **retire** rather than delete (history stays), renames keep identity,
+and a met target celebrates and asks — next lap, or retirement. Nothing
+resets silently.
+
+### Rolling
+
+**START ROLLING** turns the screen into the merged tally board for every
+active list. After **END** (or from any calendar day) the session opens for
+corrections — ± steppers per item — and notes. Past sessions can be logged
+manually; sessions are freeform, several per day if you trained twice.
+
+### Reading the results
+
+- **Grid** — the sharpness grid: items × the last 21 days' sessions, cells
+  showing hits and tries, each row's hit- and try-consistency computable in
+  your head from the cells. Calendar-honest: three weeks off the mat reads
+  as going cold, because it is.
+- **Missions** — target progress bars with lap counters.
+- **Calendar** — a month of intensity dots; tap a day for its sessions and
+  notes. Streaks run Mon–Sun and the week in progress can't break one.
 
 ## Architecture
 
 A functional core with one thin shell, after the pattern of
-[OVERTYPE](https://github.com/ptetau/overtype):
+[OVERTYPE](https://github.com/ptetau/overtype) — but the core is shaped as an
+**action log**:
 
 ```
-src/engine/   pure rules — no IO, no Math.random, no Date. JSON in, JSON out.
-src/app/      the shell: the clock (todayISO) and the disk (localStorage)
-src/ui/       React components + one stylesheet
+src/engine/   pure rules — no IO, no Math.random, no Date. Every mutation is
+              a named action {type, payload, at} folded through apply().
+src/app/      the shell: the clock (nowISO) and the disk (the log persists
+              to localStorage and replays on load).
+src/ui/       React components + one stylesheet.
+public/       PWA: manifest, service worker (offline app shell), icons.
 ```
 
-"Today" is always an ISO date string passed *into* the engine, so every rule
-replays identically in tests. Ids come from a counter, not randomness. Date
-math runs on UTC midnights so a calendar date is the same date everywhere
-and daylight saving can't make a day 23 hours.
+The log is the point: in milestone 2, clients queue these same actions
+offline and a serverless referee replays them through this exact engine into
+Postgres — persistence and sync are the same shape. Two phones tallying the
+same account merge for free, because tally actions commute.
 
 ## Running it
 
 ```
 npm install
 npm run dev       # Vite dev server
-npm test          # engine tests (vitest)
-npm run build     # static site in dist/
+npm test          # engine tests: examples + fast-check properties (vitest)
+npm run build     # static PWA in dist/
 ```
 
 Deploys anywhere that serves static files; `vercel.json` is included.
