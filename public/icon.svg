@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#17212e"/>
+  <text x="256" y="330" font-family="Arial Narrow, Oswald, sans-serif" font-weight="bold" font-size="230" text-anchor="middle" fill="#c8a24a" letter-spacing="6">得意</text>
+  <rect x="96" y="392" width="320" height="34" rx="6" fill="#3f7a4e"/>
+  <rect x="330" y="392" width="52" height="34" fill="#111925"/>
+</svg>

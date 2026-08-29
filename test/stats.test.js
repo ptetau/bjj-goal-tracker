@@ -1,90 +1,106 @@
 import { describe, expect, it } from "vitest";
-import { initState, logSession, addGoal } from "../src/engine/engine.js";
-import { daysLeft, recentWeeks, thisWeek, totals, weeklyStreak } from "../src/engine/stats.js";
+import { fold, openSession } from "../src/engine/actions.js";
+import { sharpnessGrid, summary, weeklyStreak, windowSessions, WINDOW_DAYS } from "../src/engine/stats.js";
+import { monthGrid, addMonths } from "../src/engine/dates.js";
 
-// 2026-08-29 is a Saturday; its training week starts Monday 2026-08-24.
+// 2026-08-29 is a Saturday.
 const TODAY = "2026-08-29";
+const act = (type, payload, at) => ({ type, payload, at: at || `${TODAY}T12:00:00` });
 
-const log = (s, date, minutes = 60, kind = "gi") =>
-  logSession(s, { date, minutes, kind }, TODAY);
+// Build a state with a list and a closed session per date, tapping per spec:
+// taps = { date: [[kind, times]...] } on the single item.
+function build(taps) {
+  const log = [act("createList", { name: "A", type: "tokui", lines: "Back => choke" })];
+  let s = fold(log);
+  const itemId = s.lists[0].items[0].id;
+  for (const [date, kinds] of Object.entries(taps)) {
+    log.push(act("createSession", { date }, `${date}T20:00:00`));
+    s = fold(log);
+    const sid = s.sessions[s.sessions.length - 1].id;
+    for (const [kind, times] of kinds)
+      log.push(act("adjustTap", { sessionId: sid, itemId, kind, delta: times }));
+  }
+  return { state: fold(log), itemId };
+}
 
-describe("totals", () => {
-  it("sums minutes and counts by kind", () => {
-    let s = initState();
-    s = log(s, "2026-08-10", 90, "gi");
-    s = log(s, "2026-08-11", 60, "nogi");
-    s = log(s, "2026-08-12", 30, "gi");
-    expect(totals(s)).toEqual({
-      sessions: 3,
-      minutes: 180,
-      hours: 3,
-      byKind: { gi: 2, nogi: 1 },
+describe("windowSessions", () => {
+  it("keeps the last 21 calendar days inclusive, oldest first", () => {
+    const { state } = build({ "2026-08-09": [], "2026-08-10": [], "2026-08-29": [] });
+    const w = windowSessions(state, TODAY);
+    // A 21-day window ending Aug 29 starts Aug 9.
+    expect(w.map((x) => x.date)).toEqual(["2026-08-09", "2026-08-10", "2026-08-29"]);
+    // A day later, Aug 9 ages out.
+    expect(windowSessions(state, "2026-08-30").map((x) => x.date)).toEqual(["2026-08-10", "2026-08-29"]);
+    expect(WINDOW_DAYS).toBe(21);
+  });
+
+  it("excludes the session that is still rolling", () => {
+    const log = [
+      act("createList", { name: "A", type: "tokui", lines: "x" }),
+      act("startSession", {}, `${TODAY}T19:00:00`),
+    ];
+    const state = fold(log);
+    expect(openSession(state)).not.toBe(null);
+    expect(windowSessions(state, TODAY)).toHaveLength(0);
+  });
+});
+
+describe("sharpnessGrid", () => {
+  it("counts sessions-with-a-hit and sessions-attempted, equal weight", () => {
+    const { state } = build({
+      "2026-08-12": [["hit", 2]],
+      "2026-08-19": [["try", 1]],
+      "2026-08-26": [],
     });
+    const { sessions, rows } = sharpnessGrid(state, state.lists[0], TODAY);
+    expect(sessions).toHaveLength(3);
+    const r = rows[0];
+    expect(r.cells).toEqual([{ tries: 0, hits: 2 }, { tries: 1, hits: 0 }, null]);
+    expect(r).toMatchObject({ hitIn: 1, triedIn: 2, hitPct: 33, triedPct: 67 });
+  });
+
+  it("is calendar-honest: sessions age out of the window by date", () => {
+    const { state } = build({ "2026-08-01": [["hit", 5]] }); // 4 weeks ago
+    const { sessions, rows } = sharpnessGrid(state, state.lists[0], TODAY);
+    expect(sessions).toHaveLength(0);
+    expect(rows[0].hitPct).toBe(null); // empty window, not 0% — the window is empty, not you
+  });
+
+  it("retired items leave the grid", () => {
+    const { state, itemId } = build({ "2026-08-26": [["hit", 1]] });
+    const retired = { ...state, lists: state.lists.map((l) => ({
+      ...l,
+      items: l.items.map((it) => (it.id === itemId ? { ...it, retiredAt: `${TODAY}T12:00:00` } : it)),
+    })) };
+    expect(sharpnessGrid(state, state.lists[0], TODAY).rows).toHaveLength(1);
+    expect(sharpnessGrid(retired, retired.lists[0], TODAY).rows).toHaveLength(0);
   });
 });
 
-describe("thisWeek", () => {
-  it("only counts Monday through today’s week, boundaries included", () => {
-    let s = initState();
-    s = log(s, "2026-08-23"); // Sunday — previous week
-    s = log(s, "2026-08-24"); // Monday — this week
-    s = log(s, "2026-08-29"); // Saturday — this week
-    const w = thisWeek(s, TODAY);
-    expect(w).toMatchObject({ start: "2026-08-24", sessions: 2, minutes: 120 });
+describe("weeklyStreak and summary", () => {
+  it("streaks over Mon–Sun weeks with an in-progress-week grace", () => {
+    const { state } = build({ "2026-08-19": [], "2026-08-12": [] }); // last week + week before, not this week
+    expect(weeklyStreak(state, TODAY)).toBe(2); // this week skipped, not zeroed
+    const { state: gap } = build({ "2026-08-25": [], "2026-08-12": [] }); // this week + gap
+    expect(weeklyStreak(gap, TODAY)).toBe(1);
+  });
+
+  it("summary totals hold together", () => {
+    const { state } = build({ "2026-08-26": [["hit", 3], ["try", 2]], "2026-08-24": [] });
+    expect(summary(state, TODAY)).toMatchObject({ sessions: 2, hits: 3, inWindow: 2, thisWeek: 2 });
   });
 });
 
-describe("weeklyStreak", () => {
-  it("counts consecutive qualifying weeks back from now", () => {
-    let s = initState();
-    s = log(s, "2026-08-25"); // this week
-    s = log(s, "2026-08-19"); // last week
-    s = log(s, "2026-08-12"); // week before
-    expect(weeklyStreak(s, TODAY)).toBe(3);
+describe("calendar month grid", () => {
+  it("covers the month in Monday-started full weeks", () => {
+    const rows = monthGrid("2026-08-15");
+    expect(rows[0][0]).toBe("2026-07-27"); // Aug 1 2026 is a Saturday
+    expect(rows.at(-1).at(-1) >= "2026-08-31").toBe(true);
+    for (const row of rows) expect(row).toHaveLength(7);
   });
 
-  it("a gap week breaks it", () => {
-    let s = initState();
-    s = log(s, "2026-08-25"); // this week
-    s = log(s, "2026-08-12"); // two weeks back — but last week is empty
-    expect(weeklyStreak(s, TODAY)).toBe(1);
-  });
-
-  it("the week in progress is skipped, not counted as a miss", () => {
-    let s = initState();
-    s = log(s, "2026-08-19"); // last week only
-    expect(weeklyStreak(s, TODAY)).toBe(1);
-  });
-
-  it("respects a minimum sessions-per-week bar", () => {
-    let s = initState();
-    s = log(s, "2026-08-24");
-    s = log(s, "2026-08-25"); // 2 this week
-    s = log(s, "2026-08-19"); // 1 last week
-    expect(weeklyStreak(s, TODAY, 2)).toBe(1);
-    expect(weeklyStreak(s, TODAY, 1)).toBe(2);
-  });
-});
-
-describe("recentWeeks", () => {
-  it("returns n weeks oldest-first ending with the current week", () => {
-    let s = initState();
-    s = log(s, "2026-08-25", 45);
-    s = log(s, "2026-07-07", 60); // 7 weeks back
-    const weeks = recentWeeks(s, TODAY, 8);
-    expect(weeks).toHaveLength(8);
-    expect(weeks[0]).toMatchObject({ start: "2026-07-06", sessions: 1, minutes: 60 });
-    expect(weeks[7]).toMatchObject({ start: "2026-08-24", sessions: 1, minutes: 45 });
-    expect(weeks.slice(1, 7).every((w) => w.sessions === 0)).toBe(true);
-  });
-});
-
-describe("daysLeft", () => {
-  it("is null without a deadline, signed with one", () => {
-    let s = addGoal(initState(), { title: "a", type: "milestone" }, TODAY);
-    expect(daysLeft(s.goals[0], TODAY)).toBe(null);
-    s = addGoal(s, { title: "b", type: "milestone", deadline: "2026-09-05" }, TODAY);
-    expect(daysLeft(s.goals[1], TODAY)).toBe(7);
-    expect(daysLeft(s.goals[1], "2026-09-08")).toBe(-3);
+  it("addMonths wraps years", () => {
+    expect(addMonths("2026-12-01", 1)).toBe("2027-01-01");
+    expect(addMonths("2026-01-01", -1)).toBe("2025-12-01");
   });
 });

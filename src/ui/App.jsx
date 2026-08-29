@@ -1,56 +1,56 @@
-import React, { useEffect, useState } from "react";
-import * as engine from "../engine/engine.js";
-import { load, save, todayISO } from "../app/store.js";
-import Goals from "./Goals.jsx";
-import Log from "./Log.jsx";
-import Journey from "./Journey.jsx";
+import React, { useMemo, useRef, useState } from "react";
+import { apply, openSession } from "../engine/actions.js";
+import { loadLog, loadState, nowISO, saveLog } from "../app/store.js";
+import Missions from "./Missions.jsx";
+import Roll from "./Roll.jsx";
+import Grid from "./Grid.jsx";
+import Calendar from "./Calendar.jsx";
+import SessionEditor from "./SessionEditor.jsx";
 
 const TABS = [
-  { id: "goals", label: "Goals" },
-  { id: "log", label: "Mat time" },
-  { id: "journey", label: "Journey" },
+  { id: "roll", label: "Roll" },
+  { id: "missions", label: "Missions" },
+  { id: "grid", label: "Grid" },
+  { id: "calendar", label: "Calendar" },
 ];
 
 export default function App() {
-  const [state, setState] = useState(load);
-  const [tab, setTab] = useState("goals");
+  const logRef = useRef(null);
+  if (logRef.current === null) logRef.current = loadLog();
+  const [state, setState] = useState(() => loadState(logRef.current));
+  const [tab, setTab] = useState(() =>
+    openSession(loadState(logRef.current)) || loadState(logRef.current).lists.length
+      ? "roll"
+      : "missions"
+  );
   const [error, setError] = useState(null);
-  const today = todayISO();
+  const [editing, setEditing] = useState(null); // session id under the editor overlay
 
-  useEffect(() => save(state), [state]);
-
-  // Every engine action funnels through here: validation errors surface in
-  // one banner instead of blowing up the render.
-  const act = (fn, ...args) => {
+  // Dispatch stamps the action, folds it through the pure engine, and
+  // appends it to the persisted log — errors surface in one banner.
+  const dispatch = (type, payload) => {
+    const action = { type, payload, at: nowISO() };
     try {
-      setState((s) => fn(s, ...args));
+      const next = apply(state, action);
+      logRef.current = [...logRef.current, action];
+      saveLog(logRef.current);
+      setState(next);
       setError(null);
-      return true;
+      return next;
     } catch (e) {
       setError(e.message);
-      return false;
+      return null;
     }
   };
 
-  const actions = {
-    addGoal: (draft) => act(engine.addGoal, draft, today),
-    addProgress: (id, n) => act(engine.addProgress, id, n, today),
-    completeGoal: (id) => act(engine.completeGoal, id, today),
-    reopenGoal: (id) => act(engine.reopenGoal, id),
-    archiveGoal: (id) => act(engine.archiveGoal, id, today),
-    unarchiveGoal: (id) => act(engine.unarchiveGoal, id),
-    removeGoal: (id) => act(engine.removeGoal, id),
-    logSession: (draft) => act(engine.logSession, draft, today),
-    removeSession: (id) => act(engine.removeSession, id),
-    setRank: (belt, stripes) => act(engine.setRank, belt, stripes, today),
-    setWeeklyTarget: (t) => act(engine.setWeeklyTarget, t),
-  };
+  const live = useMemo(() => openSession(state), [state]);
+  const props = { state, dispatch, live, setEditing };
 
   return (
     <div className="app">
       <header className="masthead">
         <h1>
-          BJJ <span>goal tracker</span>
+          TOKUI <span>得意</span>
         </h1>
         <nav role="tablist" aria-label="Sections">
           {TABS.map((t) => (
@@ -62,6 +62,7 @@ export default function App() {
               onClick={() => setTab(t.id)}
             >
               {t.label}
+              {t.id === "roll" && live && <span className="live-dot" aria-label="session in progress" />}
             </button>
           ))}
         </nav>
@@ -77,10 +78,20 @@ export default function App() {
       )}
 
       <main>
-        {tab === "goals" && <Goals state={state} actions={actions} today={today} />}
-        {tab === "log" && <Log state={state} actions={actions} today={today} />}
-        {tab === "journey" && <Journey state={state} actions={actions} today={today} />}
+        {tab === "roll" && <Roll {...props} />}
+        {tab === "missions" && <Missions {...props} />}
+        {tab === "grid" && <Grid {...props} />}
+        {tab === "calendar" && <Calendar {...props} />}
       </main>
+
+      {editing !== null && (
+        <SessionEditor
+          state={state}
+          dispatch={dispatch}
+          sessionId={editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </div>
   );
 }
