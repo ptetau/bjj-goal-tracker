@@ -36,6 +36,26 @@ npm run dev       # Vite dev server (SW disabled in dev)
 npm run build     # static PWA in dist/
 ```
 
+## Writing style: plain prose, grounded, no filler
+
+Everything written for this project — docs, PR descriptions, commit
+messages, code comments, and replies to the user — follows three rules:
+
+1. **Plain prose, no jargon.** Say "the site asks visitors to log into
+   Vercel before showing anything", not "the deployment is gated by
+   SSO-enforced auth middleware". If a technical term is unavoidable,
+   say what it means in the same sentence, once.
+
+2. **Ground every claim in a concrete example.** Bad: "sync is
+   resilient to connectivity loss". Good: "tap HIT in a basement with
+   no signal and the tap is saved on the phone, then sent when you're
+   back upstairs". A claim the reader can't picture happening is not
+   yet written.
+
+3. **No non-sequiturs.** Each sentence follows from the one before it,
+   and everything included helps the reader do or decide something. A
+   fact that changes nothing for them gets cut, however interesting.
+
 ## Merge policy: green means merge
 
 PRs on this repo merge automatically once CI (`.github/workflows/ci.yml`)
