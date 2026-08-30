@@ -56,6 +56,21 @@ messages, code comments, and replies to the user — follows three rules:
    and everything included helps the reader do or decide something. A
    fact that changes nothing for them gets cut, however interesting.
 
+4. **Succinct.** Say it once, in the fewest words that stay clear.
+   "Tests must pass before merge" beats "it is important to ensure that
+   the test suite is in a passing state prior to merging". If a
+   paragraph survives being halved, it was twice as long as it earned.
+
+5. **Clear.** One reading, one meaning. If a sentence could be read two
+   ways ("sync the list" — push it, or pull it?), rewrite it so only
+   the intended way survives.
+
+6. **Congruent.** What the words say matches what the thing does, at
+   every level: docs match the code, a commit message matches its diff,
+   a name matches its behaviour (a function called `retireItem` must
+   not delete). When the code changes, the words about it change in the
+   same commit.
+
 ## Merge policy: green means merge
 
 PRs on this repo merge automatically once CI (`.github/workflows/ci.yml`)
