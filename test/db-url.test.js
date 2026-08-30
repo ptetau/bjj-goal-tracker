@@ -41,4 +41,30 @@ describe("pickDatabaseUrl", () => {
     expect(pickDatabaseUrl({ DATABASE_URL: "" })).toBe(null);
     expect(pickDatabaseUrl({ DATABASE_URL: "mysql://nope" })).toBe(null);
   });
+
+  // The Vercel Prisma integration prefixes its variables with the project
+  // name the user typed — tokui_DATABASE_URL, tokui_POSTGRES_URL — so exact
+  // names alone find nothing on a real deployment.
+  it("finds prefixed variables, still skipping accelerate URLs", () => {
+    expect(
+      pickDatabaseUrl({
+        tokui_DATABASE_URL: "prisma+postgres://accelerate.prisma-data.net/?api_key=xyz",
+        tokui_POSTGRES_URL: "postgres://u:p@db.prisma.io:5432/db?sslmode=require",
+        tokui_PRISMA_DATABASE_URL: "prisma+postgres://accelerate.prisma-data.net/?api_key=xyz",
+      })
+    ).toBe("postgres://u:p@db.prisma.io:5432/db?sslmode=require");
+  });
+
+  it("prefers an exact unprefixed name over a prefixed one", () => {
+    expect(
+      pickDatabaseUrl({
+        DATABASE_URL: "postgres://exact/db",
+        tokui_DATABASE_URL: "postgres://prefixed/db",
+      })
+    ).toBe("postgres://exact/db");
+  });
+
+  it("ignores lookalike keys that don't end in a known suffix", () => {
+    expect(pickDatabaseUrl({ MY_DATABASE_URL_BACKUP: "postgres://nope/db" })).toBe(null);
+  });
 });
