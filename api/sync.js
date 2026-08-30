@@ -15,10 +15,15 @@ function getReferee() {
   if (!refereePromise) {
     refereePromise = (async () => {
       const url = pickDatabaseUrl(process.env);
-      if (!url) throw new Error("no database");
+      if (!url) throw new Error("db-not-configured");
       const pool = new pg.Pool({ connectionString: url, max: 3 });
       const schema = readFileSync(join(process.cwd(), "server", "schema.sql"), "utf8");
-      await pool.query(schema);
+      try {
+        await pool.query(schema);
+      } catch (err) {
+        console.error("db connect failed:", err);
+        throw new Error("db-unreachable");
+      }
       return makeReferee(makePgDb(pool));
     })();
     refereePromise.catch(() => (refereePromise = null)); // retry next request
@@ -26,13 +31,23 @@ function getReferee() {
   return refereePromise;
 }
 
+// Says WHY sync is down, without leaking anything: the operator reading this
+// either needs to set a variable, or to check the one they set.
+const UNAVAILABLE = {
+  "db-not-configured":
+    "no direct postgres:// URL found — set DATABASE_URL or POSTGRES_URL (a prisma+postgres:// URL doesn't count)",
+  "db-unreachable": "database URL is set but the connection failed — check the URL and that the db is up",
+};
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   let referee;
   try {
     referee = await getReferee();
-  } catch {
-    return res.status(503).json({ error: "sync unavailable" });
+  } catch (err) {
+    return res
+      .status(503)
+      .json({ error: "sync unavailable", reason: UNAVAILABLE[err.message] || "startup failed" });
   }
   try {
     const body = req.body || {};
