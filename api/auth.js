@@ -27,7 +27,10 @@ async function resendMailer(email, link) {
       text: `Tap to sign in: ${link}\n\nThe link works once and expires in 15 minutes. If you didn't ask for it, ignore this email.`,
     }),
   });
-  if (!res.ok) throw new Error(`mail send failed (${res.status})`);
+  if (!res.ok) {
+    console.error("resend refused:", res.status, await res.text().catch(() => ""));
+    throw new Error(`mail send failed (${res.status})`);
+  }
 }
 
 const logMailer = async (email, link) => console.log(`[auth] login link for ${email}: ${link}`);
@@ -78,7 +81,12 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "unknown op" });
   } catch (err) {
     const msg = String(err.message || err);
-    if (/passphrase|email|invalid or expired/.test(msg)) return res.status(400).json({ error: msg });
+    if (/mail send failed/.test(msg))
+      return res.status(502).json({
+        error:
+          "the login email couldn't be sent — check RESEND_API_KEY and MAIL_FROM; on Resend's free tier without a verified domain, only your own account email can receive mail",
+      });
+    if (/passphrase|invalid or expired|email address/.test(msg)) return res.status(400).json({ error: msg });
     console.error("auth error:", err);
     return res.status(500).json({ error: "auth failed" });
   }
