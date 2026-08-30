@@ -295,6 +295,30 @@ section > .hint { color: var(--chalk-dim); }
 }
 .celebrate button:first-of-type { background: var(--gold); color: var(--ink); font-weight: 700; }
 
+.picker-switch { margin-bottom: 12px; }
+.picker-switch button { flex: 1; }
+
+.waza-group h4 {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+  margin: 12px 0 6px;
+}
+.chips-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  background: var(--gi-hi);
+  border: 1px solid var(--gi-shade);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+.chip em { font-style: normal; color: var(--ink-faint); font-size: 0.8em; }
+.chip.on { background: var(--hit); border-color: var(--hit-deep); color: #fff; }
+.chip.on em { color: rgba(255, 255, 255, 0.75); }
+
 .tpl-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .tpl {
   display: flex;

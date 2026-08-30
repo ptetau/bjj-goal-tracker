@@ -3,10 +3,29 @@
 // Items retire rather than delete, and a met target celebrates and asks —
 // next lap, or retirement — never resets itself.
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { LIST_TYPES, targetProgress } from "../engine/actions.js";
-import { itemTitle, parseLines } from "../engine/parse.js";
-import { DEFAULT_TEMPLATES } from "../engine/templates.js";
+import { itemTitle, parseLines, toLine } from "../engine/parse.js";
+import { DEFAULT_TEMPLATES, wazaCatalogue } from "../engine/templates.js";
+
+// One fetch serves both pickers: the gym's server when reachable
+// (coach-owned), the shipped defaults offline.
+function useTemplates() {
+  const [templates, setTemplates] = useState(DEFAULT_TEMPLATES);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/templates")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (alive && Array.isArray(body?.templates) && body.templates.length) setTemplates(body.templates);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return templates;
+}
 
 const TYPE_LABEL = { tokui: "tokui · sharpen", growth: "growth · explore" };
 
@@ -142,25 +161,8 @@ function List({ list, state, dispatch }) {
   );
 }
 
-// Starter sets: served by the gym's server when reachable (coach-owned),
-// falling back to the shipped defaults offline. One tap creates a fully
-// editable list.
-function TemplatePicker({ dispatch, onDone }) {
-  const [templates, setTemplates] = useState(DEFAULT_TEMPLATES);
-
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/templates")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body) => {
-        if (alive && Array.isArray(body?.templates) && body.templates.length) setTemplates(body.templates);
-      })
-      .catch(() => {}); // offline: the shipped defaults stand
-    return () => {
-      alive = false;
-    };
-  }, []);
-
+// Whole starter sets: one tap creates a fully editable list.
+function TemplatePicker({ templates, dispatch, onDone }) {
   const pick = (t) => {
     if (dispatch("createList", { name: t.name, type: t.type, lines: t.lines })) onDone?.();
   };
@@ -179,6 +181,63 @@ function TemplatePicker({ dispatch, onDone }) {
         ))}
       </div>
       <p className="hint">Every set is a starting point — retitle, retire, and retarget items to make it yours.</p>
+    </div>
+  );
+}
+
+// Pick-your-weapons: compose a personal tokui list technique by technique.
+// The catalogue derives from the same template sets, so coach edits flow
+// through; Fundamentals items arrive pre-checked as the default missions.
+function WazaPicker({ templates, dispatch, onDone }) {
+  const groups = useMemo(() => wazaCatalogue(templates), [templates]);
+  const keyOf = (i) => `${i.position ?? ""}→${i.move}`.toLowerCase();
+  const [picked, setPicked] = useState(
+    () => new Set(groups.flatMap((g) => g.items.filter((i) => i.recommended).map(keyOf)))
+  );
+
+  const toggle = (i) =>
+    setPicked((s) => {
+      const next = new Set(s);
+      const k = keyOf(i);
+      next.has(k) ? next.delete(k) : next.add(k);
+      return next;
+    });
+
+  const create = () => {
+    const items = groups.flatMap((g) => g.items.filter((i) => picked.has(keyOf(i))));
+    const lines = items.map(toLine).join("\n");
+    if (dispatch("createList", { name: "My tokui waza", type: "tokui", lines })) onDone?.();
+  };
+
+  return (
+    <div className="card">
+      <h3>Pick your tokui waza</h3>
+      <p className="hint">
+        Tap the techniques you want to hit every session. The starters are pre-picked — add your
+        weapons, drop what isn't you.
+      </p>
+      {groups.map((g) => (
+        <div key={g.label} className="waza-group">
+          <h4>{g.label}</h4>
+          <div className="chips-row">
+            {g.items.map((i) => (
+              <button
+                key={keyOf(i)}
+                className={`chip ${picked.has(keyOf(i)) ? "on" : ""}`}
+                aria-pressed={picked.has(keyOf(i))}
+                onClick={() => toggle(i)}
+                title={`From: ${i.sources.join(", ")}`}
+              >
+                {i.move}
+                {i.target ? <em> x{i.target}</em> : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <button className="primary wide" style={{ marginTop: 12 }} onClick={create} disabled={picked.size === 0}>
+        Create my tokui list ({picked.size} waza)
+      </button>
     </div>
   );
 }
@@ -241,8 +300,26 @@ function NewList({ dispatch }) {
 export default function Missions({ state, dispatch }) {
   const active = state.lists.filter((l) => !l.archivedAt);
   const archived = state.lists.filter((l) => l.archivedAt);
+  const templates = useTemplates();
   const [showArchived, setShowArchived] = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
+  // Which onboarding panel is open: waza picker by default on an empty tab.
+  const [picker, setPicker] = useState(() => (state.lists.length === 0 ? "waza" : null));
+
+  const pickerTabs = (
+    <div className="row picker-switch">
+      <button className={picker === "waza" ? "primary" : "ghost"} onClick={() => setPicker("waza")}>
+        Pick tokui waza
+      </button>
+      <button className={picker === "sets" ? "primary" : "ghost"} onClick={() => setPicker("sets")}>
+        Mission sets
+      </button>
+      {active.length > 0 && (
+        <button className="ghost" onClick={() => setPicker(null)}>
+          close
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <section aria-label="Mission lists">
@@ -250,16 +327,20 @@ export default function Missions({ state, dispatch }) {
         <p className="empty">
           Two lists serve most people: a <strong>tokui</strong> list — the weapons you hit every
           session to stay sharp — and a <strong>growth</strong> list of what you're exploring.
-          Grab a starter set, or write your own below.
+          Pick your waza, grab a whole set, or write your own below.
         </p>
       )}
-      {(active.length === 0 || showTemplates) && (
-        <TemplatePicker dispatch={dispatch} onDone={() => setShowTemplates(false)} />
+      {picker !== null && pickerTabs}
+      {picker === "waza" && (
+        <WazaPicker templates={templates} dispatch={dispatch} onDone={() => setPicker(null)} />
+      )}
+      {picker === "sets" && (
+        <TemplatePicker templates={templates} dispatch={dispatch} onDone={() => setPicker(null)} />
       )}
       <NewList dispatch={dispatch} />
-      {active.length > 0 && !showTemplates && (
-        <button className="ghost wide" onClick={() => setShowTemplates(true)}>
-          browse mission sets
+      {active.length > 0 && picker === null && (
+        <button className="ghost wide" onClick={() => setPicker("waza")}>
+          pick waza / browse mission sets
         </button>
       )}
       {active.map((l) => (
