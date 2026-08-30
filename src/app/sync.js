@@ -47,12 +47,28 @@ export function parseSyncCode(code) {
   return m ? { id: m[1], secret: m[2] } : null;
 }
 
-async function call(fetchFn, body) {
-  const res = await fetchFn("/api/sync", {
+// --- accounts (magic-link) -------------------------------------------------
+// Logging in is credential distribution: redeeming a link returns the
+// account's tracker, and sync proceeds exactly as with a hand-carried code.
+
+export const requestLogin = (email, passphrase, fetchFn = fetch) =>
+  post(fetchFn, "/api/auth", { op: "request", email, passphrase });
+
+export const redeemLogin = (token, fetchFn = fetch) =>
+  post(fetchFn, "/api/auth", { op: "redeem", token });
+
+export const whoami = (session, fetchFn = fetch) =>
+  post(fetchFn, "/api/auth", { op: "whoami", session });
+
+async function post(fetchFn, path, body) {
+  const res = await fetchFn(path, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`sync ${res.status}`);
-  return res.json();
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(payload.error || `${path} ${res.status}`);
+  return payload;
 }
+
+const call = (fetchFn, body) => post(fetchFn, "/api/sync", body);
