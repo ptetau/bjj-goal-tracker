@@ -49,3 +49,8 @@ export const parseLines = (text) =>
 // How an item reads everywhere in the UI.
 export const itemTitle = (item) =>
   item.position ? `${item.position} → ${item.move}` : item.move;
+
+// The inverse of parseLine for arrow-free content: what the waza picker
+// creates is exactly what typing the line would have created.
+export const toLine = ({ position, move, target }) =>
+  `${position ? `${position} => ` : ""}${move}${target ? ` x${target}` : ""}`;

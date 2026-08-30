@@ -5,6 +5,38 @@
 // finishes (x25); growth sets target everything high (x50) — on a growth
 // list, fifty of the new thing is the whole point.
 
+import { parseLines } from "./parse.js";
+
+// The waza catalogue behind the picker: every technique across the template
+// sets, grouped by position and deduplicated, remembering which sets it
+// came from. Fundamentals items are the pre-checked default selection —
+// the "default missions" a brand-new user can accept with one tap.
+export function wazaCatalogue(templates) {
+  const groups = [];
+  const byPosition = new Map();
+  const seen = new Map();
+  for (const t of templates) {
+    for (const p of parseLines(t.lines)) {
+      const key = `${p.position ?? ""}→${p.move}`.toLowerCase();
+      let item = seen.get(key);
+      if (!item) {
+        item = { position: p.position, move: p.move, target: p.target, sources: [], recommended: false };
+        seen.set(key, item);
+        const label = p.position ?? "Other";
+        if (!byPosition.has(label)) {
+          byPosition.set(label, { position: p.position, label, items: [] });
+          groups.push(byPosition.get(label));
+        }
+        byPosition.get(label).items.push(item);
+      }
+      if (!item.sources.includes(t.name)) item.sources.push(t.name);
+      if (item.target === null && p.target !== null) item.target = p.target;
+      if (t.key === "fundamentals") item.recommended = true;
+    }
+  }
+  return groups;
+}
+
 export const DEFAULT_TEMPLATES = [
   {
     key: "fundamentals",
