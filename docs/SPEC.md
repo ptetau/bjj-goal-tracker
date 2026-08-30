@@ -30,6 +30,7 @@ student and coach both.
 | Timeline | Calendar-first: month grid with intensity dots, day drill-down, Mon–Sun streaks with an in-progress-week grace. |
 | Roles (M2) | Students share a list to a coach or training partner as read/comment/edit. Coaches assign lists; students accept and can archive. Comments attach to **lists and items** (not sessions). |
 | Onboarding (M2) | Signup gated by a gym passphrase; coach role via an email allowlist (env/config). |
+| Starter sets | ✅ A template picker on the empty Missions tab (and behind "browse mission sets") offers 16 curated sets — fundamentals, back attack, leg entanglement, pressure passing, the guard curriculum (closed/half/X/SLX/lasso/DLR/RDLR/collar-sleeve), loose/tight passing, standing, triangle hub. Tokui sets target finishes (x25); growth sets target everything x50 by default. Templates are **coach-owned by design**: served from Postgres (`GET /api/templates`, seeded from shipped defaults), replaced wholesale with the `TEMPLATE_ADMIN_SECRET` (`PUT` with `x-template-secret`); offline or db-less, the shipped defaults stand. |
 
 ### Technical
 

@@ -3,9 +3,10 @@
 // Items retire rather than delete, and a met target celebrates and asks —
 // next lap, or retirement — never resets itself.
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { LIST_TYPES, targetProgress } from "../engine/actions.js";
-import { itemTitle } from "../engine/parse.js";
+import { itemTitle, parseLines } from "../engine/parse.js";
+import { DEFAULT_TEMPLATES } from "../engine/templates.js";
 
 const TYPE_LABEL = { tokui: "tokui · sharpen", growth: "growth · explore" };
 
@@ -141,6 +142,47 @@ function List({ list, state, dispatch }) {
   );
 }
 
+// Starter sets: served by the gym's server when reachable (coach-owned),
+// falling back to the shipped defaults offline. One tap creates a fully
+// editable list.
+function TemplatePicker({ dispatch, onDone }) {
+  const [templates, setTemplates] = useState(DEFAULT_TEMPLATES);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/templates")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (alive && Array.isArray(body?.templates) && body.templates.length) setTemplates(body.templates);
+      })
+      .catch(() => {}); // offline: the shipped defaults stand
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const pick = (t) => {
+    if (dispatch("createList", { name: t.name, type: t.type, lines: t.lines })) onDone?.();
+  };
+
+  return (
+    <div className="card">
+      <h3>Start from a mission set</h3>
+      <div className="tpl-grid">
+        {templates.map((t) => (
+          <button key={t.key} className="tpl" onClick={() => pick(t)}>
+            <strong>{t.name}</strong>
+            <span>
+              <em className={`list-tag list-${t.type}`}>{t.type}</em> {parseLines(t.lines).length} items
+            </span>
+          </button>
+        ))}
+      </div>
+      <p className="hint">Every set is a starting point — retitle, retire, and retarget items to make it yours.</p>
+    </div>
+  );
+}
+
 function NewList({ dispatch }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -200,15 +242,25 @@ export default function Missions({ state, dispatch }) {
   const active = state.lists.filter((l) => !l.archivedAt);
   const archived = state.lists.filter((l) => l.archivedAt);
   const [showArchived, setShowArchived] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   return (
     <section aria-label="Mission lists">
-      <NewList dispatch={dispatch} />
       {active.length === 0 && (
         <p className="empty">
           Two lists serve most people: a <strong>tokui</strong> list — the weapons you hit every
           session to stay sharp — and a <strong>growth</strong> list of what you're exploring.
+          Grab a starter set, or write your own below.
         </p>
+      )}
+      {(active.length === 0 || showTemplates) && (
+        <TemplatePicker dispatch={dispatch} onDone={() => setShowTemplates(false)} />
+      )}
+      <NewList dispatch={dispatch} />
+      {active.length > 0 && !showTemplates && (
+        <button className="ghost wide" onClick={() => setShowTemplates(true)}>
+          browse mission sets
+        </button>
       )}
       {active.map((l) => (
         <List key={l.id} list={l} state={state} dispatch={dispatch} />
