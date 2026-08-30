@@ -21,6 +21,34 @@ CREATE TABLE IF NOT EXISTS actions (
 CREATE UNIQUE INDEX IF NOT EXISTS actions_by_action_id
   ON actions (tracker_id, ((action->>'id')));
 
+-- Accounts (milestone 2.2). A user owns one tracker — their action log —
+-- and logging a device in hands it the tracker credentials, replacing the
+-- carried sync code. The tracker secret is stored server-side in the clear
+-- deliberately: it must be re-issued to every newly logged-in device, and
+-- it grants nothing beyond what the auth session already grants.
+CREATE TABLE IF NOT EXISTS users (
+  id             text PRIMARY KEY,
+  email          text NOT NULL UNIQUE,
+  is_coach       boolean NOT NULL DEFAULT false,
+  tracker_id     text NOT NULL REFERENCES trackers(id),
+  tracker_secret text NOT NULL,
+  created_at     timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS login_tokens (
+  token_hash text PRIMARY KEY,
+  email      text NOT NULL,
+  expires_at timestamptz NOT NULL,
+  used_at    timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  token_hash text PRIMARY KEY,
+  user_id    text NOT NULL REFERENCES users(id),
+  expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
 -- Starter mission sets, coach-owned: seeded from the shipped defaults on
 -- first read, replaced wholesale by whoever holds the admin secret.
 CREATE TABLE IF NOT EXISTS templates (

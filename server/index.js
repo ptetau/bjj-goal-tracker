@@ -8,6 +8,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { makeReferee } from "./referee.js";
 import { makeTemplateStore } from "./templates.js";
+import { makeAuth } from "./auth.js";
 import { makePgDb, pickDatabaseUrl } from "./db-pg.js";
 
 const PORT = process.env.PORT || 8787;
@@ -40,6 +41,14 @@ async function makeDb() {
 const db = await makeDb();
 const referee = makeReferee(db);
 const templates = makeTemplateStore(db, process.env.TEMPLATE_ADMIN_SECRET);
+const auth = makeAuth({
+  db,
+  referee,
+  env: process.env,
+  // Locally the link goes to the console — copy it into the browser.
+  mailer: async (email, link) => console.log(`[auth] login link for ${email}: ${link}`),
+  now: () => new Date(),
+});
 
 const readBody = (req) =>
   new Promise((resolve, reject) => {
@@ -71,6 +80,25 @@ createServer(async (req, res) => {
       if (/envelope|batch|JSON/.test(msg)) return send(400, { error: msg });
       console.error("sync error:", err);
       return send(500, { error: "sync failed" });
+    }
+  }
+
+  if (req.url === "/api/auth") {
+    if (req.method !== "POST") return send(405, { error: "POST only" });
+    try {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      if (body.op === "request") {
+        await auth.request(body);
+        return send(200, { sent: false, reason: "local server — the login link was written to the console" });
+      }
+      if (body.op === "redeem") return send(200, await auth.redeem(body));
+      if (body.op === "whoami") return send(200, { user: await auth.whoami(body.session) });
+      return send(400, { error: "unknown op" });
+    } catch (err) {
+      const msg = String(err.message || err);
+      if (/passphrase|email|invalid or expired|JSON/.test(msg)) return send(400, { error: msg });
+      console.error("auth error:", err);
+      return send(500, { error: "auth failed" });
     }
   }
 

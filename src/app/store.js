@@ -62,7 +62,7 @@ export function newActionId() {
 // ---------------------------------------------------------------------------
 // The document
 
-export const emptyDoc = () => ({ version: 2, server: [], pending: [], cursor: 0, tracker: null });
+export const emptyDoc = () => ({ version: 2, server: [], pending: [], cursor: 0, tracker: null, auth: null });
 
 export function loadDoc() {
   try {

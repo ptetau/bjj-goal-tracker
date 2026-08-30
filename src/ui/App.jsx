@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { apply, openSession } from "../engine/actions.js";
 import { foldDoc, loadDoc, newActionId, nowISO, saveDoc } from "../app/store.js";
-import { syncDoc } from "../app/sync.js";
+import { redeemLogin, syncDoc } from "../app/sync.js";
 import Missions from "./Missions.jsx";
 import Roll from "./Roll.jsx";
 import Grid from "./Grid.jsx";
@@ -78,6 +78,18 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Arriving via a magic link (?login=TOKEN) signs this device in and
+    // binds it to the account's tracker; the token leaves the URL either way.
+    const token = new URLSearchParams(window.location.search).get("login");
+    if (token) {
+      window.history.replaceState(null, "", window.location.pathname);
+      redeemLogin(token)
+        .then((r) => {
+          setTracker({ id: r.tracker.id, secret: r.tracker.secret }, { rebase: true, auth: { session: r.session, ...r.user } });
+          setShowSync(true); // show who you are and that sync is running
+        })
+        .catch((e) => setError(`Sign-in failed: ${e.message}`));
+    }
     runSync();
     const onVisible = () => document.visibilityState === "visible" && runSync();
     window.addEventListener("online", runSync);
@@ -95,13 +107,13 @@ export default function App() {
     return () => clearTimeout(t);
   }, [doc]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const setTracker = (tracker, { rebase } = {}) => {
+  const setTracker = (tracker, { rebase, auth = null } = {}) => {
     // Linking to another tracker rebases this device's whole history as
     // pending, so its data merges into the shared log on the next sync.
     const base = docRef.current;
     const next = rebase
-      ? { ...base, tracker, server: [], cursor: 0, pending: [...base.server, ...base.pending] }
-      : { ...base, tracker };
+      ? { ...base, tracker, auth, server: [], cursor: 0, pending: [...base.server, ...base.pending] }
+      : { ...base, tracker, auth };
     commit(next);
     setTimeout(runSync, 0);
   };
