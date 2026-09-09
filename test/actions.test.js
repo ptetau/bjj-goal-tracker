@@ -3,6 +3,7 @@ import {
   apply,
   fold,
   initState,
+  liveBanks,
   openSession,
   tallies,
   targetProgress,
@@ -56,6 +57,23 @@ describe("lists and items", () => {
     apply(base, act("startSession"));
     apply(base, act("retireItem", { itemId: heel.id }));
     expect(JSON.stringify(base)).toBe(frozen);
+  });
+});
+
+describe("pad banks (the training-mode screen)", () => {
+  it("groups live items by list type, tokui first", () => {
+    expect(liveBanks(base)).toEqual([
+      { type: "tokui", items: [strangle, sweep] },
+      { type: "growth", items: [heel] },
+    ]);
+  });
+
+  it("drops retired items, and drops a bank that has nothing live", () => {
+    let s = apply(base, act("retireItem", { itemId: sweep.id }));
+    expect(liveBanks(s).map((b) => b.items.map((it) => it.id))).toEqual([[strangle.id], [heel.id]]);
+    s = apply(s, act("archiveList", { listId: base.lists[1].id }));
+    expect(liveBanks(s).map((b) => b.type)).toEqual(["tokui"]);
+    expect(liveBanks(initState())).toEqual([]);
   });
 });
 

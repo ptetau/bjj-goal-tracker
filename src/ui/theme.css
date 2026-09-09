@@ -1,7 +1,8 @@
 /* ==========================================================================
    TOKUI — dojo theme
    One committed look: midnight-blue mats, gi-canvas cards, gold accents.
-   Built phone-first: the live-roll zones are the design's centre of gravity.
+   Built phone-first. A rolling session swaps the whole screen for the deck
+   — a drum machine of pads — which has its own palette further down.
    ========================================================================== */
 
 :root {
@@ -195,78 +196,237 @@ section > .hint { color: var(--chalk-dim); }
 .idle .start:active { background: var(--hit-deep); }
 .past-session h3 { margin-bottom: 8px; }
 
-.roll-list h2 {
-  display: inline-block;
-  margin: 10px 0 8px;
+/* ---- the deck (training mode) ----
+   A drum machine: charcoal chassis, rubber pads with a colour band per
+   bank (orange tokui, yellow kaizen — the 808's row colours), LEDs that
+   light on every count, an amber display, and cream transport keys. */
+
+:root {
+  --chassis: #1e1e22;
+  --chassis-deep: #131316;
+  --panel-line: #35353c;
+  --print: #d9d6cd;
+  --print-dim: #8f8d87;
+  --pad-face: #36363d;
+  --pad-face-hi: #45454d;
+  --pad-shadow: #0d0d10;
+  --key-face: #e6e2d8;
+  --key-shadow: #8c877a;
+  --led-off: #3a3a41;
+  --led-green: #4fff82;
+  --led-amber: #ffb02e;
+  --led-red: #ff4136;
+  --band-tokui: #e8632b;
+  --band-growth: #e9c33a;
+  --lcd-bg: #0a0b0d;
+  --lcd-ink: #ffb84a;
+  --font-lcd: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
-.roll-row {
-  display: grid;
-  grid-template-columns: 1fr 74px 96px;
-  gap: 8px;
-  margin-bottom: 8px;
-  align-items: stretch;
-}
-.roll-item {
-  background: var(--gi);
-  color: var(--ink);
-  border-radius: var(--radius);
-  padding: 8px 10px;
+.deck {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  min-width: 0;
-}
-.roll-title { font-weight: 600; font-size: 0.95rem; overflow-wrap: anywhere; }
-.roll-counts { color: var(--ink-faint); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
-
-/* The zones are the app: min 56px tall, no precision required. */
-.zone {
-  font-family: var(--font-display);
-  letter-spacing: 0.08em;
-  font-size: 1.05rem;
-  min-height: 56px;
-  border-radius: var(--radius);
-  color: #fff;
-}
-.zone-try { background: var(--try); }
-.zone-try:active { background: var(--try-deep); }
-.zone-hit { background: var(--hit); font-size: 1.2rem; }
-.zone-hit:active { background: var(--hit-deep); }
-
-@keyframes zoneflash {
-  0% { box-shadow: 0 0 0 4px var(--gold-hi); filter: brightness(1.5); }
-  100% { box-shadow: 0 0 0 0 transparent; filter: none; }
-}
-.zone.flash { animation: zoneflash 0.35s ease-out; }
-
-.roll-footer {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  display: flex;
-  gap: 8px;
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-  background: var(--mat-deep);
-  border-top: 1px solid var(--line);
+  background: linear-gradient(180deg, #242429, var(--chassis) 60px, var(--chassis));
+  color: var(--print);
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
   max-width: 640px;
   margin: 0 auto;
+  user-select: none;
+  -webkit-user-select: none;
 }
-.undo, .end {
-  flex: 1;
-  min-height: 64px;
-  font-family: var(--font-display);
-  font-size: 1.2rem;
-  letter-spacing: 0.1em;
+
+.deck-top {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 6px;
+}
+.deck-brand {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.15rem;
+  letter-spacing: 0.14em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.deck-brand span { color: var(--band-tokui); font-weight: 400; font-size: 0.85rem; letter-spacing: 0; }
+
+.led {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--led-off);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.7);
+  flex: none;
+}
+.led-ok { background: var(--led-green); box-shadow: 0 0 6px var(--led-green); }
+.led-busy { background: var(--led-amber); box-shadow: 0 0 6px var(--led-amber); }
+.led-bad { background: var(--led-red); box-shadow: 0 0 6px var(--led-red); }
+
+.lcd {
+  margin: 0 12px;
+  background: var(--lcd-bg);
+  color: var(--lcd-ink);
+  font-family: var(--font-lcd);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 6px rgba(255, 184, 74, 0.55);
+  border: 1px solid #000;
+  border-radius: 5px;
+  box-shadow: inset 0 2px 8px #000, 0 1px 0 var(--panel-line);
+  padding: 7px 12px;
+  font-variant-numeric: tabular-nums;
+}
+.lcd-row { display: flex; justify-content: space-between; gap: 12px; }
+.lcd-last { margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.deck .error { margin: 8px 12px 0; }
+
+.bank-keys {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px 4px;
+}
+.bank-key {
+  flex: 1;
+  font-size: 0.85rem;
+  padding: 9px 10px;
+  min-height: 44px;
+}
+
+/* Keys: cream, screen-printed, with a shadow they sink into when pressed. */
+.key {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 8px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #f2efe7, var(--key-face));
+  color: var(--ink);
+  box-shadow: 0 3px 0 var(--key-shadow), 0 4px 6px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
 }
-.undo { background: var(--gold); color: var(--ink); flex: 1.4; }
-.undo:active { background: var(--gold-hi); }
-.undo small, .end small { font-family: var(--font-body); font-size: 0.72rem; letter-spacing: 0; font-weight: 400; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.end { background: var(--red); color: #fff; }
+.key:active, .key.on { transform: translateY(2px); box-shadow: 0 1px 0 var(--key-shadow), 0 2px 3px rgba(0, 0, 0, 0.5); }
+.key:disabled { transform: none; }
+.key .led { background: var(--led-off); box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.5); }
+.key.on .led, .key-try.on .led { background: var(--led-amber); box-shadow: 0 0 6px var(--led-amber); }
+.bank-key.on { background: linear-gradient(180deg, #fbf9f3, #ece9e0); }
+.bank-tokui.on .led { background: var(--band-tokui); box-shadow: 0 0 6px var(--band-tokui); }
+.bank-growth.on .led { background: var(--band-growth); box-shadow: 0 0 6px var(--band-growth); }
+.key-menu { font-size: 0.8rem; padding: 7px 14px; min-height: 36px; }
+
+/* Banks swipe sideways, snapping one per screen; each bank scrolls down. */
+.banks {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.banks::-webkit-scrollbar { display: none; }
+.bank {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: minmax(124px, 1fr);
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+/* Pads: rubber, a colour band on top, a count in LED digits. Min 124px
+   tall, half the screen wide — no precision required. */
+.pad {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  text-align: left;
+  min-width: 0;
+  padding: 12px 12px 10px;
+  border-radius: 8px;
+  border-top: 5px solid var(--band);
+  background: linear-gradient(180deg, var(--pad-face-hi), var(--pad-face));
+  color: var(--print);
+  box-shadow: 0 4px 0 var(--pad-shadow), 0 6px 10px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --band: var(--band-tokui);
+}
+.bank-growth .pad { --band: var(--band-growth); }
+.pad:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--pad-shadow), 0 2px 4px rgba(0, 0, 0, 0.45); }
+.pad .led { position: absolute; top: 12px; left: 12px; }
+.pad.last-hit .led { background: var(--led-green); box-shadow: 0 0 7px var(--led-green); }
+.pad.last-try .led { background: var(--led-amber); box-shadow: 0 0 7px var(--led-amber); }
+.pad-count {
+  position: absolute;
+  top: 6px;
+  right: 12px;
+  font-family: var(--font-lcd);
+  font-size: 2.1rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--lcd-ink);
+  text-shadow: 0 0 8px rgba(255, 184, 74, 0.6);
+  font-variant-numeric: tabular-nums;
+}
+.pad-count.zero { color: #6b5a3a; text-shadow: none; } /* an unlit segment */
+/* TRY latched: warm faces, and the big number counts attempts instead. */
+.mode-try .pad { background: linear-gradient(180deg, #4a4038, #3b332c); }
+.mode-try .pad-count { color: #ffd9a0; }
+.mode-try .pad-count.zero { color: #7a6a52; }
+.pad-name {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 1.05rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 100%;
+}
+.pad-name small { display: block; font-size: 0.7rem; color: var(--print-dim); letter-spacing: 0.12em; }
+.pad-tally { font-family: var(--font-body); font-size: 0.72rem; color: var(--print-dim); margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+@keyframes padlit {
+  0% { box-shadow: 0 0 0 4px var(--glow), 0 0 28px var(--glow), 0 4px 0 var(--pad-shadow); filter: brightness(1.45); }
+  100% { box-shadow: 0 4px 0 var(--pad-shadow), 0 6px 10px rgba(0, 0, 0, 0.45); filter: none; }
+}
+.pad.lit { animation: padlit 0.4s ease-out; }
+.pad.lit-hit { --glow: var(--led-green); }
+.pad.lit-try { --glow: var(--led-amber); }
+
+/* Transport: TRY latches the mode, UNDO is the widest key on the deck,
+   END closes the session. */
+.transport {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  background: var(--chassis-deep);
+  border-top: 1px solid var(--panel-line);
+}
+.transport .key { min-height: 72px; font-size: 1.2rem; flex-direction: column; gap: 4px; }
+.key-try { flex: 1; }
+.key-try .led { margin: 0; }
+.key-undo { flex: 2.2; background: linear-gradient(180deg, #ffd45c, var(--gold-hi)); box-shadow: 0 3px 0 #9a7a2c, 0 4px 6px rgba(0, 0, 0, 0.5); }
+.key-undo:active { box-shadow: 0 1px 0 #9a7a2c, 0 2px 3px rgba(0, 0, 0, 0.5); }
+.key-undo small { font-family: var(--font-body); font-size: 0.7rem; letter-spacing: 0; text-transform: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.key-end { flex: 1; background: linear-gradient(180deg, #ff5a4e, #d63a30); color: #fff; box-shadow: 0 3px 0 #7d1d17, 0 4px 6px rgba(0, 0, 0, 0.5); }
+.key-end:active { box-shadow: 0 1px 0 #7d1d17, 0 2px 3px rgba(0, 0, 0, 0.5); }
 
 /* ---- missions ---- */
 
@@ -445,6 +605,5 @@ section > .hint { color: var(--chalk-dim); }
 .note-label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 0.85rem; margin-top: 12px; }
 
 @media (max-width: 420px) {
-  .roll-row { grid-template-columns: 1fr 64px 84px; }
   .stat-row { grid-template-columns: repeat(2, 1fr); }
 }

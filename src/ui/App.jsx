@@ -4,6 +4,7 @@ import { foldDoc, loadDoc, newActionId, nowISO, saveDoc } from "../app/store.js"
 import { redeemLogin, syncDoc } from "../app/sync.js";
 import Missions from "./Missions.jsx";
 import Roll from "./Roll.jsx";
+import Pads from "./Pads.jsx";
 import Grid from "./Grid.jsx";
 import Calendar from "./Calendar.jsx";
 import SessionEditor from "./SessionEditor.jsx";
@@ -121,6 +122,28 @@ export default function App() {
   const dot =
     !doc.tracker ? "off" : syncInfo.status === "offline" ? "bad" : doc.pending.length ? "busy" : "ok";
 
+  // A rolling session owns the screen: no masthead, no tabs, just the pads.
+  // MENU leaves the pads for the Missions tab while the session keeps
+  // rolling; the Roll tab's live dot brings the pads back.
+  const live = openSession(state);
+  if (live && tab === "roll") {
+    return (
+      <Pads
+        state={state}
+        live={live}
+        dispatch={dispatch}
+        syncDot={dot}
+        error={error}
+        clearError={() => setError(null)}
+        onExit={() => setTab("missions")}
+        onEnd={() => {
+          dispatch("endSession", { sessionId: live.id });
+          setEditing(live.id); // straight into notes and corrections
+        }}
+      />
+    );
+  }
+
   return (
     <div className="app">
       <header className="masthead">
@@ -156,7 +179,7 @@ export default function App() {
       )}
 
       <main>
-        {tab === "roll" && <Roll state={state} dispatch={dispatch} live={openSession(state)} setEditing={setEditing} />}
+        {tab === "roll" && <Roll state={state} dispatch={dispatch} setEditing={setEditing} />}
         {tab === "missions" && <Missions state={state} dispatch={dispatch} />}
         {tab === "grid" && <Grid state={state} />}
         {tab === "calendar" && <Calendar state={state} dispatch={dispatch} setEditing={setEditing} />}

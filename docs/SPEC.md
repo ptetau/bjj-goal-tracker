@@ -24,6 +24,7 @@ student and coach both.
 | Capture | Live tally is primary; sessions stay editable after (± steppers, notes). Manual past sessions allowed. Sessions are freeform — several per day. |
 | Tap semantics | Two zones per item: **TRY** (attempted, no finish) and **HIT** (finished — implies the attempt). Rate = hits ÷ (tries + hits). |
 | Ergonomics | Giant undo-last-tap with label; haptic (Android) + visual flash on every count; live mode never demands re-auth. No wake lock. |
+| Training mode | ✅ A rolling session takes the whole screen, styled as a drum machine: one fat pad per live item (tap = one hit), a latching TRY key that makes pad taps count attempts instead, two banks you swipe between or pick with A/B keys — A is the tokui lists, B ("Kaizen") the growth lists — a display echoing the last tap, and one UNDO for whatever the last tap was. MENU leaves the pads with the session still rolling; END closes it and opens the editor. No masthead, no tabs, nothing that needs precision. |
 | Sharpness | Consistency over a **21-day calendar window**, every session equal weight — legible over smooth. Cells show hits *and* tries; tokui rows lead with hit-consistency, growth rows with try-consistency. Empty window shows "no data", not 0%. |
 | Targets | Met target → celebrate → explicit choice: next lap or retire. Laps count on (lap 2 of x50 = hits 51–100). Changing a target resets laps. |
 | Lifecycle | Items/lists retire or archive, never silently delete; renames keep ids so history follows the item. Sessions can be deleted. |

@@ -286,6 +286,19 @@ export function tallies(session) {
   return map;
 }
 
+// The pads for the training-mode screen: one bank per list type (tokui,
+// then growth), each holding the live items of that type's unarchived
+// lists in list order. A bank with nothing live is left out, so the screen
+// only offers a swipe when there is somewhere to swipe to.
+export function liveBanks(state) {
+  return LIST_TYPES.map((type) => ({
+    type,
+    items: state.lists
+      .filter((l) => l.type === type && !l.archivedAt)
+      .flatMap((l) => l.items.filter((it) => !it.retiredAt)),
+  })).filter((b) => b.items.length > 0);
+}
+
 // Lifetime hit count for an item, across every session.
 export const totalHits = (state, itemId) =>
   state.sessions.reduce(
