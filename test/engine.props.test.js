@@ -128,11 +128,9 @@ describe("pad banks, under arbitrary legal histories", () => {
       const shown = banks.flatMap((b) => b.items.map((it) => it.id));
       expect(shown.sort()).toEqual([...expected].sort());
       expect(new Set(shown).size).toBe(shown.length);
-      // Banks come in LIST_TYPES order, never empty, each holding only its own type.
-      const order = banks.map((b) => LIST_TYPES.indexOf(b.type));
-      expect(order).toEqual([...order].sort((x, y) => x - y));
+      // Always one bank per kind, in LIST_TYPES order, each holding only its own type.
+      expect(banks.map((b) => b.type)).toEqual(LIST_TYPES);
       for (const b of banks) {
-        expect(b.items.length).toBeGreaterThan(0);
         for (const it of b.items) {
           const owner = state.lists.find((l) => l.items.includes(it));
           expect(owner.type).toBe(b.type);

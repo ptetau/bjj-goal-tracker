@@ -346,6 +346,21 @@ section > .hint { color: var(--chalk-dim); }
   padding: 10px 12px;
 }
 
+.bank-empty {
+  grid-column: 1 / -1;
+  align-self: center;
+  text-align: center;
+  padding: 24px 12px;
+  color: var(--print-dim);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.bank-empty p { margin: 0; font-size: 1rem; color: var(--print); max-width: 30ch; }
+.bank-empty .key { min-height: 56px; padding: 0 22px; font-size: 1rem; }
+.bank-empty small { font-size: 0.8rem; }
+
 /* Pads: rubber, a colour band on top, a count in LED digits. Min 124px
    tall, half the screen wide — no precision required. */
 .pad {

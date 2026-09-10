@@ -70,12 +70,18 @@ describe("pad banks (the training-mode screen)", () => {
     ]);
   });
 
-  it("drops retired items, and drops a bank that has nothing live", () => {
+  it("drops retired items; a bank with nothing live is still there, empty", () => {
     let s = apply(base, act("retireItem", { itemId: sweep.id }));
     expect(liveBanks(s).map((b) => b.items.map((it) => it.id))).toEqual([[strangle.id], [heel.id]]);
     s = apply(s, act("archiveList", { listId: base.lists[1].id }));
-    expect(liveBanks(s).map((b) => b.type)).toEqual(["tokui"]);
-    expect(liveBanks(initState())).toEqual([]);
+    expect(liveBanks(s)).toEqual([
+      { type: "tokui", items: [strangle] },
+      { type: "growth", items: [] },
+    ]);
+    expect(liveBanks(initState())).toEqual([
+      { type: "tokui", items: [] },
+      { type: "growth", items: [] },
+    ]);
   });
 });
 
