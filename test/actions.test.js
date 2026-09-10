@@ -3,8 +3,10 @@ import {
   apply,
   fold,
   initState,
+  ITEM_LIMITS,
   liveBanks,
   openSession,
+  room,
   tallies,
   targetProgress,
   totalHits,
@@ -74,6 +76,28 @@ describe("pad banks (the training-mode screen)", () => {
     s = apply(s, act("archiveList", { listId: base.lists[1].id }));
     expect(liveBanks(s).map((b) => b.type)).toEqual(["tokui"]);
     expect(liveBanks(initState())).toEqual([]);
+  });
+});
+
+describe("room on a list (one short list per kind)", () => {
+  it("counts live items against the cap for the kind", () => {
+    expect(ITEM_LIMITS).toEqual({ tokui: 7, growth: 3 });
+    expect(room(base, "tokui")).toEqual({ live: 2, max: 7, left: 5 });
+    expect(room(base, "growth")).toEqual({ live: 1, max: 3, left: 2 });
+    expect(() => room(base, "cardio")).toThrow(/kind/);
+  });
+
+  it("retiring frees a slot; archiving the list frees them all", () => {
+    let s = apply(base, act("retireItem", { itemId: sweep.id }));
+    expect(room(s, "tokui").left).toBe(6);
+    s = apply(s, act("archiveList", { listId: base.lists[0].id }));
+    expect(room(s, "tokui")).toEqual({ live: 0, max: 7, left: 7 });
+  });
+
+  it("is a query, not a gate: an over-full history still replays, and says how far over", () => {
+    const lines = Array.from({ length: 5 }, (_, i) => `drill ${i}`).join("\n");
+    const s = apply(base, act("addLines", { listId: base.lists[1].id, lines }));
+    expect(room(s, "growth")).toEqual({ live: 6, max: 3, left: -3 });
   });
 });
 

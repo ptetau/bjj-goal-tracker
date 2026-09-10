@@ -21,6 +21,14 @@ import { parseLine, parseLines } from "./parse.js";
 export const LIST_TYPES = ["tokui", "growth"]; // exploit list / explore-and-grow list
 export const TAP_KINDS = ["try", "hit"]; // a hit implies the attempt — one tap per event
 
+// One short list per kind. Tokui waza are the few things you do all the
+// time — a submission, a guard, a sweep, a takedown, maybe one to three
+// more. Kaizen (the growth list) is what you're working on right now; more
+// than three and you're working on nothing. `room` is the query the
+// screens honour; the log itself never rejects an over-full history, so
+// everything written before the cap still replays.
+export const ITEM_LIMITS = { tokui: 7, growth: 3 };
+
 export function initState() {
   return { version: 2, lists: [], sessions: [] };
 }
@@ -297,6 +305,15 @@ export function liveBanks(state) {
       .filter((l) => l.type === type && !l.archivedAt)
       .flatMap((l) => l.items.filter((it) => !it.retiredAt)),
   })).filter((b) => b.items.length > 0);
+}
+
+// How many live items a kind holds against its cap. `left` goes negative
+// on a history that outgrew the cap — a fact for the screen to show, not
+// a reason to refuse the log.
+export function room(state, type) {
+  const max = ITEM_LIMITS[type] ?? fail(`unknown list kind: ${type}`);
+  const live = liveBanks(state).find((b) => b.type === type)?.items.length ?? 0;
+  return { live, max, left: max - live };
 }
 
 // Lifetime hit count for an item, across every session.

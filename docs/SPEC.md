@@ -18,7 +18,8 @@ student and coach both.
 | Question | Decision |
 | --- | --- |
 | Audience | One gym per deployment. Coaches see all students; students see their own data plus lists shared with them. |
-| List kinds | **tokui** (exploit — stay sharp) and **growth** (explore) as one model; any item may carry a cumulative target (`x50`). |
+| List kinds | **tokui** (exploit — stay sharp) and **growth** (explore, shown as "Kaizen") as one model; any item may carry a cumulative target (`x50`). |
+| One short list each | You keep **one tokui list of at most 7 live items** — a submission, a guard, a sweep, a takedown, maybe one to three more — and **one kaizen list of at most 3**: more than that and you're working on nothing. The Missions tab has one slot per kind; a slot offers a way to make a list only while empty, and Add / restore go dark when the list is full. The cap is an engine query (`room`), honoured by the screens, not a rule the log enforces — a history that outgrew the cap still replays and simply shows "9 of 7". |
 | Item shape | Semi-structured: `Position => move` parses for grouping/UX, but any line is accepted verbatim. Colons don't split; arrows do. |
 | Authoring | Text-first: type or paste lines, the parser does the rest. |
 | Capture | Live tally is primary; sessions stay editable after (± steppers, notes). Manual past sessions allowed. Sessions are freeform — several per day. |
@@ -31,8 +32,8 @@ student and coach both.
 | Timeline | Calendar-first: month grid with intensity dots, day drill-down, Mon–Sun streaks with an in-progress-week grace. |
 | Roles (M2) | Students share a list to a coach or training partner as read/comment/edit. Coaches assign lists; students accept and can archive. Comments attach to **lists and items** (not sessions). |
 | Onboarding (M2) | Signup gated by a gym passphrase; coach role via an email allowlist (env/config). |
-| Waza picker | ✅ New users can also compose a personal tokui list technique-by-technique: the catalogue derives from the template sets (deduplicated, grouped by position, so coach edits flow through), Fundamentals items arrive pre-checked as the default missions, and creating serializes picks back to authoring lines (`toLine`, round-trip tested). |
-| Starter sets | ✅ A template picker on the empty Missions tab (and behind "browse mission sets") offers 16 curated sets — fundamentals, back attack, leg entanglement, pressure passing, the guard curriculum (closed/half/X/SLX/lasso/DLR/RDLR/collar-sleeve), loose/tight passing, standing, triangle hub. Tokui sets target finishes (x25); growth sets target everything x50 by default. Templates are **coach-owned by design**: served from Postgres (`GET /api/templates`, seeded from shipped defaults), replaced wholesale with the `TEMPLATE_ADMIN_SECRET` (`PUT` with `x-template-secret`); offline or db-less, the shipped defaults stand. |
+| Waza picker | ✅ An empty tokui slot opens the picker: the catalogue derives from the template sets (deduplicated, grouped by position, so coach edits flow through), Fundamentals items arrive pre-checked as the default missions, picking stops at the cap, and creating serializes picks back to authoring lines (`toLine`, round-trip tested). "Or write your own lines" swaps in a plain text form; a kaizen list is always written as lines. |
+| Starter sets | ✅ 16 curated sets feed the waza picker — as its catalogue, and as presets a "Start from a set" chip loads (trimmed to the cap); a set no longer becomes a list of its own — fundamentals, back attack, leg entanglement, pressure passing, the guard curriculum (closed/half/X/SLX/lasso/DLR/RDLR/collar-sleeve), loose/tight passing, standing, triangle hub. Tokui sets target finishes (x25); growth sets target everything x50 by default. Templates are **coach-owned by design**: served from Postgres (`GET /api/templates`, seeded from shipped defaults), replaced wholesale with the `TEMPLATE_ADMIN_SECRET` (`PUT` with `x-template-secret`); offline or db-less, the shipped defaults stand. |
 
 ### Technical
 

@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { apply, fold, initState, liveBanks, LIST_TYPES, openSession, tallies, targetProgress } from "../src/engine/actions.js";
+import { apply, fold, initState, ITEM_LIMITS, liveBanks, LIST_TYPES, openSession, room, tallies, targetProgress } from "../src/engine/actions.js";
 import { itemTitle, parseLine } from "../src/engine/parse.js";
 import { sharpnessGrid, weeklyStreak, windowSessions } from "../src/engine/stats.js";
 import { addDays, monthGrid, weekStart } from "../src/engine/dates.js";
@@ -137,6 +137,20 @@ describe("pad banks, under arbitrary legal histories", () => {
           const owner = state.lists.find((l) => l.items.includes(it));
           expect(owner.type).toBe(b.type);
         }
+      }
+    }));
+  });
+});
+
+describe("room, under arbitrary legal histories", () => {
+  it("agrees with the pad banks and never blocks a replay", () => {
+    fc.assert(fc.property(arbSeeds, (seeds) => {
+      const { state } = playSeeds(initState(), seeds);
+      const banks = liveBanks(state);
+      for (const type of LIST_TYPES) {
+        const r = room(deepFreeze(state), type);
+        const live = banks.find((b) => b.type === type)?.items.length ?? 0;
+        expect(r).toEqual({ live, max: ITEM_LIMITS[type], left: ITEM_LIMITS[type] - live });
       }
     }));
   });
