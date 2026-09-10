@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { apply, fold, initState, openSession, tallies, targetProgress } from "../src/engine/actions.js";
+import { apply, fold, initState, ITEM_LIMITS, liveBanks, LIST_TYPES, openSession, room, tallies, targetProgress } from "../src/engine/actions.js";
 import { itemTitle, parseLine } from "../src/engine/parse.js";
 import { sharpnessGrid, weeklyStreak, windowSessions } from "../src/engine/stats.js";
 import { addDays, monthGrid, weekStart } from "../src/engine/dates.js";
@@ -112,6 +112,45 @@ describe("the action log, under arbitrary legal histories", () => {
           expect(p.pct).toBeGreaterThanOrEqual(0);
           expect(p.pct).toBeLessThanOrEqual(100);
         }
+      }
+    }));
+  });
+});
+
+describe("pad banks, under arbitrary legal histories", () => {
+  it("show every live item exactly once, in its own list's bank, and nothing retired or archived", () => {
+    fc.assert(fc.property(arbSeeds, (seeds) => {
+      const { state } = playSeeds(initState(), seeds);
+      const banks = liveBanks(deepFreeze(state));
+      const expected = state.lists
+        .filter((l) => !l.archivedAt)
+        .flatMap((l) => l.items.filter((it) => !it.retiredAt).map((it) => it.id));
+      const shown = banks.flatMap((b) => b.items.map((it) => it.id));
+      expect(shown.sort()).toEqual([...expected].sort());
+      expect(new Set(shown).size).toBe(shown.length);
+      // Banks come in LIST_TYPES order, never empty, each holding only its own type.
+      const order = banks.map((b) => LIST_TYPES.indexOf(b.type));
+      expect(order).toEqual([...order].sort((x, y) => x - y));
+      for (const b of banks) {
+        expect(b.items.length).toBeGreaterThan(0);
+        for (const it of b.items) {
+          const owner = state.lists.find((l) => l.items.includes(it));
+          expect(owner.type).toBe(b.type);
+        }
+      }
+    }));
+  });
+});
+
+describe("room, under arbitrary legal histories", () => {
+  it("agrees with the pad banks and never blocks a replay", () => {
+    fc.assert(fc.property(arbSeeds, (seeds) => {
+      const { state } = playSeeds(initState(), seeds);
+      const banks = liveBanks(state);
+      for (const type of LIST_TYPES) {
+        const r = room(deepFreeze(state), type);
+        const live = banks.find((b) => b.type === type)?.items.length ?? 0;
+        expect(r).toEqual({ live, max: ITEM_LIMITS[type], left: ITEM_LIMITS[type] - live });
       }
     }));
   });
