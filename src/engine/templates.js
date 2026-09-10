@@ -1,227 +1,193 @@
-// Starter mission sets — the catalogue a new user picks from on an empty
-// Missions tab. Pure data in the exact authoring format the parser reads,
-// shared by the client (offline fallback) and the server store (seed +
-// coach-owned truth). Conventions, per the spec: tokui sets target the
-// finishes (x25); growth sets target everything high (x50) — on a growth
-// list, fifty of the new thing is the whole point.
-
-import { parseLines } from "./parse.js";
-
-// Position families: the colour coding on the Missions tab. A grappler
-// groups positions by where the fight is — standing, under someone's
-// guard game, on top passing, controlling from mount or the back, or in
-// the legs — so a list reads at a glance. Anything unrecognised (a hub like
-// "Triangle", a free-form item) falls under "other".
-export const FAMILIES = [
-  { key: "standing", label: "Standing" },
-  { key: "guard", label: "Guard & bottom" },
-  { key: "top", label: "Top & passing" },
-  { key: "back", label: "Mount, back, turtle" },
-  { key: "legs", label: "Legs" },
-  { key: "other", label: "Other" },
-];
-
-const FAMILY_OF = {
-  standing: "standing",
-  guard: "guard", "closed guard": "guard", "half guard": "guard", "x-guard": "guard", slx: "guard", lasso: "guard",
-  dlr: "guard", rdlr: "guard", "collar sleeve": "guard", bottom: "guard", "mount bottom": "guard",
-  top: "top", "side control": "top",
-  mount: "back", back: "back", turtle: "back",
-  leg: "legs",
-};
-
-export const familyOf = (position) =>
-  FAMILY_OF[String(position ?? "").trim().toLowerCase().replace(/\s+/g, " ")] || "other";
-
-// The waza catalogue behind the picker: every technique across the template
-// sets, grouped by position and deduplicated, remembering which sets it
-// came from. Fundamentals items are the pre-checked default selection —
-// the "default missions" a brand-new user can accept with one tap.
-export function wazaCatalogue(templates) {
-  const groups = [];
-  const byPosition = new Map();
-  const seen = new Map();
-  for (const t of templates) {
-    for (const p of parseLines(t.lines)) {
-      const key = `${p.position ?? ""}→${p.move}`.toLowerCase();
-      let item = seen.get(key);
-      if (!item) {
-        item = { position: p.position, move: p.move, target: p.target, sources: [], recommended: false };
-        seen.set(key, item);
-        const label = p.position ?? "Other";
-        if (!byPosition.has(label)) {
-          byPosition.set(label, { position: p.position, label, items: [] });
-          groups.push(byPosition.get(label));
-        }
-        byPosition.get(label).items.push(item);
-      }
-      if (!item.sources.includes(t.name)) item.sources.push(t.name);
-      if (item.target === null && p.target !== null) item.target = p.target;
-      if (t.key === "fundamentals") item.recommended = true;
-    }
-  }
-  return groups;
-}
+// Starter sets — the coach's sets an empty slot offers. Pure data in the
+// exact authoring format the parser reads, every line a step on the ladder
+// ("from => to", see ladder.js), shared by the client (offline fallback)
+// and the server store (seed + coach-owned truth). Conventions, per the
+// spec: tokui sets target the finishes (x25), never the makes and holds;
+// growth sets target everything high (x50) — on a growth list, fifty of
+// the new thing is the whole point.
 
 export const DEFAULT_TEMPLATES = [
   {
     key: "fundamentals",
     name: "Fundamentals",
     type: "tokui",
-    lines: `Bottom => frame and shrimp escape
-Mount bottom => trap and roll x25
-Closed guard => break posture and climb
-Bottom => technical stand up x25
-Top => knee on belly control
-Mount => cross collar strangle x25`,
+    lines: `Both standing => Collar tie
+Collar tie => Front headlock
+Front headlock => Takedown x25
+I'm down => Closed guard
+Closed guard => Hold
+Closed guard => Armbar x25`,
+  },
+  {
+    key: "front-headlock",
+    name: "Front headlock",
+    type: "tokui",
+    lines: `Both standing => Front headlock
+Front headlock => Hold
+Front headlock => Rear body lock
+Front headlock => Takedown x25
+Front headlock => Guillotine x25
+Front headlock => Darce x25
+Front headlock => Anaconda x25`,
+  },
+  {
+    key: "body-lock",
+    name: "Body lock",
+    type: "tokui",
+    lines: `Both standing => Body lock
+Body lock => Hold
+Body lock => Rear body lock
+Body lock => Takedown x25
+Rear body lock => Takedown x25
+Rear body lock => Back x25`,
+  },
+  {
+    key: "single-leg",
+    name: "Single leg",
+    type: "tokui",
+    lines: `Both standing => Single leg
+Single leg => Hold
+Single leg => Rear body lock
+Single leg => Takedown x25
+Single leg => Back x25`,
+  },
+  {
+    key: "two-on-one",
+    name: "Two-on-one",
+    type: "tokui",
+    lines: `Both standing => Two-on-one
+Two-on-one => Hold
+Two-on-one => Front headlock
+Two-on-one => Rear body lock
+Two-on-one => Takedown x25`,
   },
   {
     key: "back-attack",
-    name: "Back attack system",
+    name: "Back attack",
     type: "tokui",
-    lines: `Bottom => sweep to back
-Top => back take
-Back => strangle | arm bar x50
-Back => arm trap | reverse triangle x25
-Mount => strangle | arm bar x25
-Turtle => seatbelt to hooks`,
+    lines: `They're down => Seatbelt
+Seatbelt => Hold
+Seatbelt => Rear naked strangle x25
+Seatbelt => Bow and arrow x25
+Seatbelt => Armbar x25`,
   },
   {
-    key: "leg-entanglement",
-    name: "Leg entanglement game",
-    type: "growth",
-    lines: `Bottom => leg entanglement entry x50
-Top => leg entangle x50
-Leg => inside heel x50
-Leg => outside heel x50
-Leg => Mateusz footlock x50
-Leg => backside 50/50 transition x50`,
-  },
-  {
-    key: "pressure-pass",
-    name: "Pressure pass & pin",
+    key: "mount-ties",
+    name: "Mount ties",
     type: "tokui",
-    lines: `Top => pinning: around the outside redirection
-Top => pinning: tight weight and balance
-Top => body lock pass x25
-Side control => transition to mount x25
-Mount => hold through three escapes
-Top => knee cut x25`,
+    lines: `They're down => Gift wrap
+Gift wrap => Hold
+Gift wrap => Back x25
+Crowbar => Back x25
+Shoulder lever => Back x25
+Gift wrap => Armbar x25
+Cross face => Collar strangle x25`,
   },
   {
     key: "closed-guard",
     name: "Closed guard",
     type: "tokui",
-    lines: `Closed guard => break posture and keep it
-Closed guard => arm bar x25
-Closed guard => triangle x25
-Closed guard => hip bump sweep x25
-Closed guard => flower sweep x25
-Closed guard => back take`,
+    lines: `I'm down => Closed guard
+Closed guard => Hold
+Closed guard => Triangle x25
+Closed guard => Armbar x25
+Closed guard => Seatbelt
+Closed guard => Mount x25`,
   },
   {
     key: "half-guard",
     name: "Half guard",
     type: "tokui",
-    lines: `Half guard => knee shield frames
-Half guard => underhook to dogfight
-Half guard => old school sweep x25
-Half guard => back take x25
-Half guard => electric chair entry`,
+    lines: `I'm down => Knee shield
+Knee shield => Underhook
+Underhook => Hold
+Underhook => Seatbelt
+Underhook => Mount x25
+Underhook => Side control x25`,
   },
   {
-    key: "x-guard",
-    name: "X-guard",
-    type: "growth",
-    lines: `Bottom => x-guard entry x50
-X-guard => technical stand up sweep x50
-X-guard => off balance to single leg x50
-X-guard => transition to SLX x50`,
-  },
-  {
-    key: "slx",
-    name: "Single leg X",
-    type: "growth",
-    lines: `Bottom => SLX entry x50
-SLX => sweep x50
-SLX => transition to x-guard x50
-SLX => straight ankle lock x50`,
-  },
-  {
-    key: "lasso",
-    name: "Lasso guard",
-    type: "growth",
-    lines: `Guard => lasso grip entry x50
-Lasso => omoplata x50
-Lasso => triangle x50
-Lasso => balloon sweep x50`,
-  },
-  {
-    key: "dlr",
-    name: "De la Riva",
-    type: "growth",
-    lines: `Guard => DLR hook entry x50
-DLR => berimbolo to back x50
-DLR => sweep to single leg x50
-DLR => kiss of the dragon x50`,
-  },
-  {
-    key: "rdlr",
-    name: "Reverse De la Riva",
-    type: "growth",
-    lines: `Guard => RDLR entry x50
-RDLR => back take x50
-RDLR => sweep x50
-RDLR => kneebar entry x50`,
-  },
-  {
-    key: "collar-sleeve",
-    name: "Collar sleeve guard",
-    type: "growth",
-    lines: `Guard => collar sleeve grips x50
-Collar sleeve => triangle x50
-Collar sleeve => omoplata x50
-Collar sleeve => balloon sweep x50`,
-  },
-  {
-    key: "loose-passing",
-    name: "Loose passing",
+    key: "passing",
+    name: "Passing",
     type: "tokui",
-    lines: `Top => toreando pass x25
-Top => leg drag x25
-Top => long step x25
-Top => shin pin to knee cut x25
-Top => recover distance when framed`,
-  },
-  {
-    key: "tight-passing",
-    name: "Tight passing",
-    type: "tokui",
-    lines: `Top => body lock pass x25
-Top => over under pass x25
-Top => half guard knee cut x25
-Top => smash pass to mount x25
-Top => kill the knee shield`,
+    lines: `They're down => Double underhooks
+Double underhooks => Hold
+Double underhooks => Side control x25
+Double underhooks => Mount x25
+They're down => Body lock
+Body lock => Side control x25`,
   },
   {
     key: "standing",
     name: "Standing game",
     type: "tokui",
-    lines: `Standing => collar sleeve grip fighting
-Standing => over under clinch
-Standing => two on one control
-Standing => snap down to front headlock x25
-Standing => single leg finish x25`,
+    lines: `Both standing => Collar tie
+Collar tie => Two-on-one
+Collar tie => Front headlock
+Front headlock => Takedown x25
+Both standing => Single leg
+Single leg => Takedown x25`,
+  },
+  {
+    key: "leg-entanglement",
+    name: "Leg entanglements",
+    type: "growth",
+    lines: `I'm down => Inside entanglement x50
+Inside entanglement => Hold x50
+Inside entanglement => Outside entanglement x50
+Outside entanglement => Heel hook x50
+Inside entanglement => Heel hook x50
+Closed entanglement => Heel hook x50`,
+  },
+  {
+    key: "dlr",
+    name: "De la Riva",
+    type: "growth",
+    lines: `I'm down => DLR hook x50
+DLR hook => Hold x50
+DLR hook => Seatbelt x50
+DLR hook => Single leg x50
+DLR hook => Mount x50`,
+  },
+  {
+    key: "rdlr",
+    name: "Reverse De la Riva",
+    type: "growth",
+    lines: `I'm down => RDLR hook x50
+RDLR hook => Hold x50
+RDLR hook => Seatbelt x50
+RDLR hook => Mount x50
+RDLR hook => Kneebar x50`,
+  },
+  {
+    key: "collar-sleeve",
+    name: "Collar sleeve and lasso",
+    type: "growth",
+    lines: `I'm down => Collar and sleeve x50
+Collar and sleeve => Lasso x50
+Collar and sleeve => Triangle hub x50
+Lasso => Omoplata x50
+Triangle hub => Triangle x50`,
+  },
+  {
+    key: "butterfly-k",
+    name: "Butterfly and K guard",
+    type: "growth",
+    lines: `I'm down => Butterfly hooks x50
+Butterfly hooks => Hold x50
+Butterfly hooks => Mount x50
+Butterfly hooks => Inside entanglement x50
+K guard => Inside entanglement x50
+K guard => Back x50`,
   },
   {
     key: "triangle-hub",
     name: "Triangle hub",
     type: "growth",
-    lines: `Closed guard => triangle entry x50
-Mount => triangle transition x50
-Back => reverse triangle x50
-Triangle => cut the angle and finish x50
-Triangle => switch to arm bar x50
-Triangle => sweep when stalled x50`,
+    lines: `Closed guard => Triangle hub x50
+Triangle hub => Hold x50
+Triangle hub => Triangle x50
+Triangle hub => Armbar x50
+Triangle hub => Omoplata hub x50
+Omoplata hub => Omoplata x50`,
   },
 ];

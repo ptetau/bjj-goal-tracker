@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "BJJ goal tracker — set goals, log mat time, watch the belt fill in.",
+  "description": "BJJ goal tracker \u2014 set goals, log mat time, watch the belt fill in.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "server": "node --env-file-if-exists=.env.development.local server/index.js",
     "start": "npm run build && node --env-file-if-exists=.env.development.local server/index.js",
-    "db:migrate": "node --env-file-if-exists=.env.development.local scripts/migrate-db.js"
+    "db:migrate": "node --env-file-if-exists=.env.development.local scripts/migrate-db.js",
+    "templates:push": "node --env-file-if-exists=.env.development.local scripts/push-templates.js"
   },
   "dependencies": {
     "pg": "^8.23.0",

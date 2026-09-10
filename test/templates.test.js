@@ -7,62 +7,32 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { makePgliteDb } from "./pglite-db.js";
-import { DEFAULT_TEMPLATES, FAMILIES, familyOf, wazaCatalogue } from "../src/engine/templates.js";
+import { DEFAULT_TEMPLATES } from "../src/engine/templates.js";
+import { rungOf } from "../src/engine/ladder.js";
 import { makeTemplateStore } from "../server/templates.js";
 import { parseLines } from "../src/engine/parse.js";
 import { apply, initState } from "../src/engine/actions.js";
-
-describe("position families (the colour coding)", () => {
-  it("files every catalogue position under a named family, never the fallback", () => {
-    const positions = wazaCatalogue(DEFAULT_TEMPLATES).map((g) => g.position).filter(Boolean);
-    expect(positions.length).toBeGreaterThan(10);
-    for (const p of positions) {
-      const f = familyOf(p);
-      expect(FAMILIES.map((x) => x.key)).toContain(f);
-      if (p !== "Triangle") expect(f).not.toBe("other");
-    }
-  });
-
-  it("groups the way a grappler would, ignoring case and spacing", () => {
-    expect(familyOf("Standing")).toBe("standing");
-    expect(familyOf("closed guard")).toBe("guard");
-    expect(familyOf("  DLR ")).toBe("guard");
-    expect(familyOf("Bottom")).toBe("guard");
-    expect(familyOf("Top")).toBe("top");
-    expect(familyOf("Side control")).toBe("top");
-    expect(familyOf("Mount")).toBe("back");
-    expect(familyOf("Turtle")).toBe("back");
-    expect(familyOf("Leg")).toBe("legs");
-    expect(familyOf("Triangle")).toBe("other");
-    expect(familyOf(null)).toBe("other");
-    expect(familyOf("Something new")).toBe("other");
-  });
-
-  it("orders families for a rail, each with a label", () => {
-    expect(FAMILIES.map((f) => f.key)).toEqual(["standing", "guard", "top", "back", "legs", "other"]);
-    for (const f of FAMILIES) expect(f.label).toMatch(/\w/);
-  });
-});
 
 describe("DEFAULT_TEMPLATES content", () => {
   it("ships the agreed catalogue", () => {
     const keys = DEFAULT_TEMPLATES.map((t) => t.key);
     for (const expected of [
       "fundamentals",
+      "front-headlock",
+      "body-lock",
+      "single-leg",
+      "two-on-one",
       "back-attack",
-      "leg-entanglement",
-      "pressure-pass",
+      "mount-ties",
       "closed-guard",
       "half-guard",
-      "x-guard",
-      "slx",
-      "lasso",
+      "passing",
+      "standing",
+      "leg-entanglement",
       "dlr",
       "rdlr",
       "collar-sleeve",
-      "loose-passing",
-      "tight-passing",
-      "standing",
+      "butterfly-k",
       "triangle-hub",
     ])
       expect(keys).toContain(expected);
@@ -85,6 +55,11 @@ describe("DEFAULT_TEMPLATES content", () => {
       });
       expect(state.lists[0].items).toHaveLength(items.length);
     }
+  });
+
+  it("every template line is on the ladder: from => to lands on a named rung", () => {
+    for (const t of DEFAULT_TEMPLATES)
+      for (const item of parseLines(t.lines)) expect(rungOf(item.position, item.move), `${t.key}: ${item.position} => ${item.move}`).not.toBe("other");
   });
 
   it("growth templates default every item to a high x50 target", () => {

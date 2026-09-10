@@ -1,13 +1,9 @@
-// The tokui waza picker: a new user composes a personal list by tapping
-// individual techniques. The catalogue is derived from the template sets —
-// one curated source, coach edits flow through — grouped by position and
-// deduplicated. `toLine` turns a picked item back into an authoring line,
-// so what the picker creates is exactly what typing it would have created.
+// `toLine` turns an item back into an authoring line, so what the taps
+// create is exactly what typing the line would have created.
 
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import { parseLine, toLine } from "../src/engine/parse.js";
-import { DEFAULT_TEMPLATES, wazaCatalogue } from "../src/engine/templates.js";
 
 describe("toLine", () => {
   it("serializes items back to authoring lines", () => {
@@ -34,39 +30,5 @@ describe("toLine", () => {
         }
       )
     );
-  });
-});
-
-describe("wazaCatalogue", () => {
-  const groups = wazaCatalogue(DEFAULT_TEMPLATES);
-
-  it("groups every template item by position, deduplicated", () => {
-    const allTitles = groups.flatMap((g) => g.items.map((i) => `${i.position}→${i.move}`.toLowerCase()));
-    expect(new Set(allTitles).size).toBe(allTitles.length);
-    // "Back => strangle | arm bar" appears in the back-attack set once, deduped
-    const back = groups.find((g) => g.position === "Back");
-    expect(back.items.filter((i) => i.move.includes("strangle")).length).toBe(1);
-  });
-
-  it("keeps targets and remembers which sets an item came from", () => {
-    const back = groups.find((g) => g.position === "Back");
-    const strangle = back.items.find((i) => i.move === "strangle | arm bar");
-    expect(strangle.target).toBe(50);
-    expect(strangle.sources).toContain("Back attack system");
-  });
-
-  it("marks the fundamentals items as the default selection", () => {
-    const defaults = groups.flatMap((g) => g.items.filter((i) => i.recommended));
-    expect(defaults.length).toBeGreaterThanOrEqual(4);
-    for (const i of defaults) expect(i.sources).toContain("Fundamentals");
-  });
-
-  it("every catalogue item serializes to a line the engine accepts", () => {
-    for (const g of groups)
-      for (const i of g.items) {
-        const parsed = parseLine(toLine(i));
-        expect(parsed.move).toBe(i.move);
-        expect(parsed.position).toBe(i.position);
-      }
   });
 });

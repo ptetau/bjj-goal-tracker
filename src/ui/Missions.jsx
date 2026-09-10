@@ -3,16 +3,21 @@
 // one to three more (cap 7). KAIZEN is what you're working on right now
 // (cap 3 — more than that and you're working on nothing).
 //
-// Entry is two taps: pick the position on a rail, tap the move. Editing is
-// a grid: tap the position pill to change it, type the move (with the
-// catalogue suggesting), tap the target to cycle it. Colour is by position
-// family, so a list reads at a glance. Items retire rather than delete, and
-// a met target celebrates and asks — next lap, or retirement — never resets.
+// Every item is a step on the ladder, "from => to" (see engine/ladder.js).
+// Entry is two taps: pick the "from" on a rail — one of the four
+// disconnected shapes, or a connection — then tap where it goes: a
+// connection to make or transition to, Hold to maintain, or a finish to
+// profit. Editing is a grid: tap the from-pill to change it, type the "to"
+// (with the ladder suggesting), tap the target to cycle it. Colour is by
+// rung, so a list shows at a glance whether it is all finishes and no
+// entries. Items retire rather than delete, and a met target celebrates
+// and asks — next lap, or retirement — never resets.
 
 import React, { useEffect, useMemo, useState } from "react";
 import { LIST_TYPES, room, targetProgress } from "../engine/actions.js";
 import { itemTitle, parseLines, toLine } from "../engine/parse.js";
-import { DEFAULT_TEMPLATES, FAMILIES, familyOf, wazaCatalogue } from "../engine/templates.js";
+import { DEFAULT_TEMPLATES } from "../engine/templates.js";
+import { CONNECTIONS, DISCONNECTED, HOLD, RUNGS, isDisconnected, rungOf, toOptions } from "../engine/ladder.js";
 
 // One fetch serves the rail: the gym's server when reachable
 // (coach-owned), the shipped defaults offline.
@@ -55,48 +60,60 @@ const TARGETS = [
   [25, "x25"],
   [50, "x50"],
 ];
-const famIndex = (p) => FAMILIES.findIndex((f) => f.key === familyOf(p));
-const same = (a, b) => String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
+const same = (a, b) =>
+  String(a ?? "").trim().toLowerCase().replace(/[’']/g, "") === String(b ?? "").trim().toLowerCase().replace(/[’']/g, "");
 
-// The catalogue as a rail: positions in family order, each with its moves.
-function usePositions(templates) {
-  return useMemo(() => {
-    const groups = wazaCatalogue(templates).filter((g) => g.position);
-    return groups
-      .map((g, i) => ({ position: g.position, family: familyOf(g.position), items: g.items, order: i }))
-      .sort((a, b) => famIndex(a.position) - famIndex(b.position) || a.order - b.order);
-  }, [templates]);
-}
+// The first tap's rail: the four disconnected shapes, then every connection.
+const FROMS = [...DISCONNECTED.map((d) => d.label), ...CONNECTIONS];
+const RUNG_LABEL = Object.fromEntries(RUNGS.map((r) => [r.key, r.label]));
+const KIND_LABEL = { takedown: "Takedown", position: "Pins and back", submission: "Submissions" };
 
-function PositionPill({ position, onClick, label }) {
+// The "from" pill, coloured by the rung the whole item lands on.
+function FromPill({ item, onClick, label }) {
+  const rung = rungOf(item.position, item.move);
   return (
-    <button className={`pos-pill f-${familyOf(position)}`} onClick={onClick} aria-label={label}>
-      {position || "free"}
+    <button className={`pos-pill r-${rung} ${isDisconnected(item.position) ? "open" : ""}`} onClick={onClick} aria-label={label}>
+      {item.position || "free"}
     </button>
   );
 }
 
-// The rail + move grid. Two taps adds a line to the list; when the slot has
-// no list yet, the first tap creates it.
+// The second tap's options, grouped for headings: connections (make or
+// transition), Hold, finishes by kind.
+function groupOptions(from) {
+  const opts = toOptions(from);
+  const groups = [];
+  const hold = opts.filter((o) => o.rung === "maintain");
+  const conns = opts.filter((o) => o.rung === "make" || o.rung === "transition");
+  if (hold.length) groups.push({ title: "Maintain", rung: "maintain", options: hold });
+  if (conns.length) groups.push({ title: conns[0].rung === "make" ? "Make the connection" : "Transition to", rung: conns[0].rung, options: conns });
+  for (const kind of ["takedown", "position", "submission"]) {
+    const fin = opts.filter((o) => o.rung === "profit" && o.kind === kind);
+    if (fin.length) groups.push({ title: `Profit · ${KIND_LABEL[kind]}`, rung: "profit", options: fin });
+  }
+  return groups;
+}
+
+// The rail + the second tap. Two taps write a line; when the slot has no
+// list yet, the first line creates it.
 function Taps({ type, state, dispatch, templates, list }) {
   const kind = KIND[type];
-  const positions = usePositions(templates);
-  const [pos, setPos] = useState(positions[0]?.position ?? null);
+  const [from, setFrom] = useState(FROMS[0]);
   const [target, setTarget] = useState(kind.defaultTarget);
   const [custom, setCustom] = useState("");
   const r = room(state, type);
   const full = r.left <= 0;
-  const group = positions.find((g) => g.position === pos) || positions[0];
   const live = list ? list.items.filter((it) => !it.retiredAt) : [];
-  const has = (move) => live.some((it) => same(it.position, group?.position) && same(it.move, move));
+  const has = (to) => live.some((it) => same(it.position, from) && same(it.move, to));
+  const groups = useMemo(() => groupOptions(from), [from]);
 
   const addLines = (lines) => {
     if (list) return dispatch("addLines", { listId: list.id, lines });
     return dispatch("createList", { name: kind.defaultName, type, lines });
   };
-  const addMove = (move) => {
-    if (full || !move.trim() || has(move)) return;
-    if (addLines(toLine({ position: group.position, move: move.trim(), target }))) setCustom("");
+  const addTo = (to) => {
+    if (full || !to.trim() || has(to)) return;
+    if (addLines(toLine({ position: from, move: to.trim(), target }))) setCustom("");
   };
   const loadSet = (t) => {
     const lines = parseLines(t.lines).slice(0, r.max).map(toLine).join("\n");
@@ -104,7 +121,7 @@ function Taps({ type, state, dispatch, templates, list }) {
   };
 
   const q = custom.trim().toLowerCase();
-  const suggestions = q ? (group?.items || []).filter((i) => i.move.toLowerCase().includes(q) && !same(i.move, custom)).slice(0, 6) : [];
+  const suggestions = q ? toOptions(from).filter((o) => o.to.toLowerCase().includes(q) && !same(o.to, custom)).slice(0, 6) : [];
 
   return (
     <div className="taps">
@@ -115,23 +132,23 @@ function Taps({ type, state, dispatch, templates, list }) {
             {templates
               .filter((t) => t.type === type)
               .map((t) => (
-                <button key={t.key} className="chip f-other" onClick={() => loadSet(t)}>
+                <button key={t.key} className="chip r-other" onClick={() => loadSet(t)}>
                   {t.name} <em>{Math.min(r.max, parseLines(t.lines).length)}</em>
                 </button>
               ))}
           </div>
-          <h4 className="taps-label">Or pick position, then move</h4>
         </>
       )}
-      <div className="rail" role="group" aria-label="Position">
-        {positions.map((g) => (
+      <h4 className="taps-label">From</h4>
+      <div className="rail" role="group" aria-label="From">
+        {FROMS.map((f) => (
           <button
-            key={g.position}
-            className={`chip f-${g.family} ${g === group ? "on" : ""}`}
-            aria-pressed={g === group}
-            onClick={() => setPos(g.position)}
+            key={f}
+            className={`chip ${isDisconnected(f) ? "open" : "r-other"} ${same(f, from) ? "on" : ""}`}
+            aria-pressed={same(f, from)}
+            onClick={() => setFrom(f)}
           >
-            {g.position}
+            {f}
           </button>
         ))}
       </div>
@@ -145,72 +162,73 @@ function Taps({ type, state, dispatch, templates, list }) {
       {full ? (
         <p className="hint">Full — {r.max} is the cap for {kind.title.toLowerCase()}. Retire something to make room.</p>
       ) : (
-        group && (
-          <>
-            <h4 className="taps-label">
-              {group.position} — tap to add
-            </h4>
-            <div className="chips-row">
-              {group.items.map((i) => (
-                <button
-                  key={i.move}
-                  className={`chip f-${group.family} ${has(i.move) ? "on" : ""}`}
-                  disabled={has(i.move)}
-                  onClick={() => addMove(i.move)}
-                  aria-label={`Add ${group.position} → ${i.move}`}
-                >
-                  {i.move}
-                </button>
-              ))}
-            </div>
-            <div className="row taps-custom">
-              <div className="acwrap">
-                <input
-                  type="text"
-                  value={custom}
-                  placeholder={`Or type a ${group.position} move`}
-                  autoCapitalize="off"
-                  autoComplete="off"
-                  enterKeyHint="done"
-                  aria-label={`Custom ${group.position} move`}
-                  onChange={(e) => setCustom(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addMove(custom);
-                    }
-                  }}
-                />
-                {suggestions.length > 0 && (
-                  <div className="ac">
-                    {suggestions.map((i) => (
-                      <button key={i.move} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => addMove(i.move)}>
-                        {i.move}
-                      </button>
-                    ))}
-                  </div>
-                )}
+        <>
+          {groups.map((g) => (
+            <div key={g.title}>
+              <h4 className="taps-label">
+                {from} → <span className={`rung-tag r-${g.rung}`}>{g.title}</span>
+              </h4>
+              <div className="rail" role="group" aria-label={`${from} to ${g.title}`}>
+                {g.options.map((o) => (
+                  <button
+                    key={o.to}
+                    className={`chip r-${o.rung} ${has(o.to) ? "on" : ""}`}
+                    disabled={has(o.to)}
+                    onClick={() => addTo(o.to)}
+                    aria-label={`Add ${from} → ${o.to}`}
+                  >
+                    {o.to}
+                  </button>
+                ))}
               </div>
-              <button className="primary" onClick={() => addMove(custom)} disabled={!custom.trim() || has(custom)}>
-                Add
-              </button>
             </div>
-          </>
-        )
+          ))}
+          <div className="row taps-custom">
+            <div className="acwrap">
+              <input
+                type="text"
+                value={custom}
+                placeholder={`Or type where ${from} goes`}
+                autoCapitalize="off"
+                autoComplete="off"
+                enterKeyHint="done"
+                aria-label={`Custom destination from ${from}`}
+                onChange={(e) => setCustom(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addTo(custom);
+                  }
+                }}
+              />
+              {suggestions.length > 0 && (
+                <div className="ac">
+                  {suggestions.map((o) => (
+                    <button key={o.to} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => addTo(o.to)}>
+                      <b className={`r-${o.rung}`}>{RUNG_LABEL[o.rung]}</b> {o.to}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button className="primary" onClick={() => addTo(custom)} disabled={!custom.trim() || has(custom)}>
+              Add
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
 }
 
 // One editable row of the grid.
-function Row({ item, state, dispatch, positions, canRestore }) {
+function Row({ item, state, dispatch, canRestore }) {
   const [picking, setPicking] = useState(false);
   const [move, setMove] = useState(item.move);
   const [focus, setFocus] = useState(false);
   useEffect(() => setMove(item.move), [item.move]);
   const p = targetProgress(state, item);
-  const family = familyOf(item.position);
-  const group = positions.find((g) => same(g.position, item.position));
+  const rung = rungOf(item.position, item.move);
 
   const retitle = (position, nextMove) => {
     const m = (nextMove ?? move).trim();
@@ -227,17 +245,16 @@ function Row({ item, state, dispatch, positions, canRestore }) {
   };
 
   const q = move.trim().toLowerCase();
-  const pool = group ? group.items : [];
-  const suggestions = focus && q ? pool.filter((i) => i.move.toLowerCase().includes(q) && i.move !== move).slice(0, 5) : [];
-  const known = [...positions.map((g) => g.position)];
+  const suggestions = focus && q ? toOptions(item.position).filter((o) => o.to.toLowerCase().includes(q) && o.to !== move).slice(0, 5) : [];
+  const known = [...FROMS];
   if (item.position && !known.some((x) => same(x, item.position))) known.unshift(item.position);
 
   return (
-    <li className={`mission row-edit f-${family} ${p?.met ? "met" : ""} ${item.retiredAt ? "retired" : ""}`}>
+    <li className={`mission row-edit r-${rung} ${p?.met ? "met" : ""} ${item.retiredAt ? "retired" : ""}`}>
       <div className="row-line">
-        <PositionPill
-          position={item.position}
-          label={`Position: ${item.position || "free-form"}. Tap to change`}
+        <FromPill
+          item={item}
+          label={`From: ${item.position || "free-form"}. Tap to change`}
           onClick={() => !item.retiredAt && setPicking((v) => !v)}
         />
         {item.retiredAt ? (
@@ -247,7 +264,7 @@ function Row({ item, state, dispatch, positions, canRestore }) {
             <input
               type="text"
               value={move}
-              aria-label={`Move for ${itemTitle(item)}`}
+              aria-label={`Destination for ${itemTitle(item)}`}
               autoCapitalize="off"
               autoComplete="off"
               onChange={(e) => setMove(e.target.value)}
@@ -260,9 +277,9 @@ function Row({ item, state, dispatch, positions, canRestore }) {
             />
             {suggestions.length > 0 && (
               <div className="ac">
-                {suggestions.map((i) => (
-                  <button key={i.move} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setMove(i.move); retitle(item.position, i.move); }}>
-                    {i.move}
+                {suggestions.map((o) => (
+                  <button key={o.to} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setMove(o.to); retitle(item.position, o.to); }}>
+                    <b className={`r-${o.rung}`}>{RUNG_LABEL[o.rung]}</b> {o.to}
                   </button>
                 ))}
               </div>
@@ -295,7 +312,7 @@ function Row({ item, state, dispatch, positions, canRestore }) {
           {known.map((x) => (
             <button
               key={x}
-              className={`chip f-${familyOf(x)} ${same(x, item.position) ? "on" : ""}`}
+              className={`chip ${isDisconnected(x) ? "open" : "r-other"} ${same(x, item.position) ? "on" : ""}`}
               onClick={() => {
                 setPicking(false);
                 retitle(x);
@@ -305,7 +322,7 @@ function Row({ item, state, dispatch, positions, canRestore }) {
             </button>
           ))}
           <button
-            className={`chip f-other ${!item.position ? "on" : ""}`}
+            className={`chip r-other ${!item.position ? "on" : ""}`}
             onClick={() => {
               setPicking(false);
               retitle(null);
@@ -346,8 +363,7 @@ function Row({ item, state, dispatch, positions, canRestore }) {
   );
 }
 
-function List({ list, state, dispatch, templates }) {
-  const positions = usePositions(templates);
+function List({ list, state, dispatch }) {
   const active = list.items.filter((it) => !it.retiredAt);
   const retired = list.items.filter((it) => it.retiredAt);
   const [showRetired, setShowRetired] = useState(false);
@@ -374,10 +390,10 @@ function List({ list, state, dispatch, templates }) {
 
       <ul className="mission-list">
         {active.map((it) => (
-          <Row key={it.id} item={it} state={state} dispatch={dispatch} positions={positions} />
+          <Row key={it.id} item={it} state={state} dispatch={dispatch} />
         ))}
       </ul>
-      {active.length === 0 && <p className="hint">Empty list — tap a position and a move below.</p>}
+      {active.length === 0 && <p className="hint">Empty list — tap a "from" and a "to" below.</p>}
 
       {retired.length > 0 && (
         <>
@@ -387,7 +403,7 @@ function List({ list, state, dispatch, templates }) {
           {showRetired && (
             <ul className="mission-list">
               {retired.map((it) => (
-                <Row key={it.id} item={it} state={state} dispatch={dispatch} positions={positions} canRestore={r.left > 0} />
+                <Row key={it.id} item={it} state={state} dispatch={dispatch} canRestore={r.left > 0} />
               ))}
             </ul>
           )}
@@ -414,7 +430,7 @@ function Slot({ type, state, dispatch, templates }) {
       {/* Keyed siblings, so the rail keeps its position when the first tap
           turns an empty slot into a list card above it. */}
       {[
-        ...lists.map((l) => <List key={l.id} list={l} state={state} dispatch={dispatch} templates={templates} />),
+        ...lists.map((l) => <List key={l.id} list={l} state={state} dispatch={dispatch} />),
         <div key="taps" className="card taps-card">
           <Taps type={type} state={state} dispatch={dispatch} templates={templates} list={lists[0] || null} />
         </div>,
@@ -436,9 +452,9 @@ export default function Missions({ state, dispatch }) {
   return (
     <section aria-label="Mission lists">
       <div className="legend" aria-label="Colour key">
-        {FAMILIES.map((f) => (
-          <span key={f.key}>
-            <i className={`f-${f.key}`} aria-hidden="true" /> {f.label}
+        {RUNGS.filter((r) => r.key !== "other").map((r) => (
+          <span key={r.key} title={r.blurb}>
+            <i className={`r-${r.key}`} aria-hidden="true" /> {r.label}
           </span>
         ))}
       </div>
