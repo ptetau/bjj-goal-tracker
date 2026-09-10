@@ -4,8 +4,8 @@
 // (cap 3 — more than that and you're working on nothing).
 //
 // Every item is a step on the ladder, "from => to" (see engine/ladder.js).
-// Entry is two taps: pick the "from" on a rail — one of the four
-// disconnected shapes, or a connection — then tap where it goes: a
+// Entry is a sheet with one step at a time: pick the "from" — one of the
+// four disconnected shapes, or a connection — then tap where it goes: a
 // connection to make or transition to, Hold to maintain, or a finish to
 // profit. Editing is a grid: tap the from-pill to change it, type the "to"
 // (with the ladder suggesting), tap the target to cycle it. Colour is by
@@ -94,18 +94,22 @@ function groupOptions(from) {
   return groups;
 }
 
-// The rail + the second tap. Two taps write a line; when the slot has no
-// list yet, the first line creates it.
-function Taps({ type, state, dispatch, templates, list }) {
+// The add sheet: one step at a time. Step one picks the "from" (a
+// disconnected shape or a connection); step two picks where it goes, grouped
+// by rung. A tap adds the line and stays on step two, so "Front headlock →
+// Darce" then "→ Guillotine" is two taps, not four. The first line of an
+// empty slot creates its list.
+function AddSheet({ type, state, dispatch, list, onClose }) {
   const kind = KIND[type];
-  const [from, setFrom] = useState(FROMS[0]);
+  const [from, setFrom] = useState(null);
   const [target, setTarget] = useState(kind.defaultTarget);
   const [custom, setCustom] = useState("");
   const r = room(state, type);
   const full = r.left <= 0;
   const live = list ? list.items.filter((it) => !it.retiredAt) : [];
   const has = (to) => live.some((it) => same(it.position, from) && same(it.move, to));
-  const groups = useMemo(() => groupOptions(from), [from]);
+  const groups = useMemo(() => (from ? groupOptions(from) : []), [from]);
+  const added = live.filter((it) => same(it.position, from)).length;
 
   const addLines = (lines) => {
     if (list) return dispatch("addLines", { listId: list.id, lines });
@@ -115,108 +119,121 @@ function Taps({ type, state, dispatch, templates, list }) {
     if (full || !to.trim() || has(to)) return;
     if (addLines(toLine({ position: from, move: to.trim(), target }))) setCustom("");
   };
-  const loadSet = (t) => {
-    const lines = parseLines(t.lines).slice(0, r.max).map(toLine).join("\n");
-    dispatch("createList", { name: t.name, type, lines });
-  };
 
   const q = custom.trim().toLowerCase();
-  const suggestions = q ? toOptions(from).filter((o) => o.to.toLowerCase().includes(q) && !same(o.to, custom)).slice(0, 6) : [];
+  const suggestions = q && from ? toOptions(from).filter((o) => o.to.toLowerCase().includes(q) && !same(o.to, custom)).slice(0, 6) : [];
 
   return (
-    <div className="taps">
-      {!list && (
-        <>
-          <h4 className="taps-label">Start from a set</h4>
-          <div className="chips-row">
-            {templates
-              .filter((t) => t.type === type)
-              .map((t) => (
-                <button key={t.key} className="chip r-other" onClick={() => loadSet(t)}>
-                  {t.name} <em>{Math.min(r.max, parseLines(t.lines).length)}</em>
+    <div className="overlay" role="dialog" aria-modal="true" aria-label={`Add to ${kind.title}`}>
+      <div className="sheet add-sheet">
+        <div className="sheet-head">
+          {from ? (
+            <button className="ghost" onClick={() => setFrom(null)} aria-label="Back to from">
+              ‹ {from}
+            </button>
+          ) : (
+            <h2>From</h2>
+          )}
+          <span className="count">{r.live} of {r.max}</span>
+          <button className="primary" onClick={onClose}>
+            Done
+          </button>
+        </div>
+
+        {!from && (
+          <>
+            <h4 className="taps-label">Disconnected</h4>
+            <div className="chips-row">
+              {DISCONNECTED.map((d) => (
+                <button key={d.label} className="chip open" title={d.hint} onClick={() => setFrom(d.label)}>
+                  {d.label}
                 </button>
               ))}
-          </div>
-        </>
-      )}
-      <h4 className="taps-label">From</h4>
-      <div className="rail" role="group" aria-label="From">
-        {FROMS.map((f) => (
-          <button
-            key={f}
-            className={`chip ${isDisconnected(f) ? "open" : "r-other"} ${same(f, from) ? "on" : ""}`}
-            aria-pressed={same(f, from)}
-            onClick={() => setFrom(f)}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
-      <div className="tseg" role="group" aria-label="Target">
-        {TARGETS.map(([v, label]) => (
-          <button key={label} aria-pressed={target === v} onClick={() => setTarget(v)}>
-            {label}
-          </button>
-        ))}
-      </div>
-      {full ? (
-        <p className="hint">Full — {r.max} is the cap for {kind.title.toLowerCase()}. Retire something to make room.</p>
-      ) : (
-        <>
-          {groups.map((g) => (
-            <div key={g.title}>
-              <h4 className="taps-label">
-                {from} → <span className={`rung-tag r-${g.rung}`}>{g.title}</span>
-              </h4>
-              <div className="rail" role="group" aria-label={`${from} to ${g.title}`}>
-                {g.options.map((o) => (
-                  <button
-                    key={o.to}
-                    className={`chip r-${o.rung} ${has(o.to) ? "on" : ""}`}
-                    disabled={has(o.to)}
-                    onClick={() => addTo(o.to)}
-                    aria-label={`Add ${from} → ${o.to}`}
-                  >
-                    {o.to}
-                  </button>
-                ))}
-              </div>
             </div>
-          ))}
-          <div className="row taps-custom">
-            <div className="acwrap">
-              <input
-                type="text"
-                value={custom}
-                placeholder={`Or type where ${from} goes`}
-                autoCapitalize="off"
-                autoComplete="off"
-                enterKeyHint="done"
-                aria-label={`Custom destination from ${from}`}
-                onChange={(e) => setCustom(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addTo(custom);
-                  }
-                }}
-              />
-              {suggestions.length > 0 && (
-                <div className="ac">
-                  {suggestions.map((o) => (
-                    <button key={o.to} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => addTo(o.to)}>
-                      <b className={`r-${o.rung}`}>{RUNG_LABEL[o.rung]}</b> {o.to}
+            <h4 className="taps-label">Connections</h4>
+            <div className="chips-row">
+              {CONNECTIONS.map((c) => (
+                <button key={c} className="chip r-other" onClick={() => setFrom(c)}>
+                  {c}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {from && full && (
+          <p className="hint">Full — {r.max} is the cap for {kind.title.toLowerCase()}. Retire something to make room.</p>
+        )}
+
+        {from && !full && (
+          <>
+            <div className="tseg" role="group" aria-label="Target">
+              {TARGETS.map(([v, label]) => (
+                <button key={label} aria-pressed={target === v} onClick={() => setTarget(v)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {groups.map((g) => (
+              <div key={g.title}>
+                <h4 className="taps-label">
+                  <span className={`rung-tag r-${g.rung}`}>{g.title}</span>
+                </h4>
+                <div className="chips-row">
+                  {g.options.map((o) => (
+                    <button
+                      key={o.to}
+                      className={`chip r-${o.rung} ${has(o.to) ? "on" : ""}`}
+                      disabled={has(o.to)}
+                      onClick={() => addTo(o.to)}
+                      aria-label={`Add ${from} → ${o.to}`}
+                    >
+                      {o.to}
                     </button>
                   ))}
                 </div>
-              )}
+              </div>
+            ))}
+            <div className="row taps-custom">
+              <div className="acwrap">
+                <input
+                  type="text"
+                  value={custom}
+                  placeholder="Or type where it goes"
+                  autoCapitalize="off"
+                  autoComplete="off"
+                  enterKeyHint="done"
+                  aria-label={`Custom destination from ${from}`}
+                  onChange={(e) => setCustom(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addTo(custom);
+                    }
+                  }}
+                />
+                {suggestions.length > 0 && (
+                  <div className="ac">
+                    {suggestions.map((o) => (
+                      <button key={o.to} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => addTo(o.to)}>
+                        <b className={`r-${o.rung}`}>{RUNG_LABEL[o.rung]}</b> {o.to}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button className="primary" onClick={() => addTo(custom)} disabled={!custom.trim() || has(custom)}>
+                Add
+              </button>
             </div>
-            <button className="primary" onClick={() => addTo(custom)} disabled={!custom.trim() || has(custom)}>
-              Add
-            </button>
-          </div>
-        </>
-      )}
+            {added > 0 && (
+              <p className="hint">
+                {added} on the list from {from}. Tap another, or Done.
+              </p>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -333,7 +350,7 @@ function Row({ item, state, dispatch, canRestore }) {
         </div>
       )}
 
-      {p && (
+      {p && (p.done > 0 || p.met) && (
         <>
           <div
             className="bar"
@@ -376,24 +393,12 @@ function List({ list, state, dispatch }) {
 
   return (
     <div className="card list-card">
-      <div className="list-head">
-        <h3>
-          {list.name} <span className={`list-tag list-${list.type}`}>{KIND[list.type].tag}</span>
-        </h3>
-        <span className="mission-tools">
-          <button className="ghost tiny" onClick={rename}>rename</button>
-          <button className="ghost tiny" onClick={() => dispatch("archiveList", { listId: list.id })}>
-            archive
-          </button>
-        </span>
-      </div>
-
       <ul className="mission-list">
         {active.map((it) => (
           <Row key={it.id} item={it} state={state} dispatch={dispatch} />
         ))}
       </ul>
-      {active.length === 0 && <p className="hint">Empty list — tap a "from" and a "to" below.</p>}
+      {active.length === 0 && <p className="hint">Empty list — tap Add below.</p>}
 
       {retired.length > 0 && (
         <>
@@ -414,32 +419,53 @@ function List({ list, state, dispatch }) {
   );
 }
 
-// One slot per kind. While the slot has a list, it shows it; while it is
-// empty, the same two taps create it.
+// One slot per kind: the list (if any), one Add button, and the sheet it
+// opens. An empty slot also offers the coach's sets, trimmed to the cap.
 function Slot({ type, state, dispatch, templates }) {
   const kind = KIND[type];
   const lists = state.lists.filter((l) => l.type === type && !l.archivedAt);
+  const list = lists[0] || null;
   const r = room(state, type);
+  const [adding, setAdding] = useState(false);
+
+  const loadSet = (t) => {
+    const lines = parseLines(t.lines).slice(0, r.max).map(toLine).join("\n");
+    dispatch("createList", { name: t.name, type, lines });
+  };
 
   return (
     <div className="slot">
       <h2 className="slot-title">
         {kind.title} <span className={`list-tag list-${type}`}>{r.live} of {r.max}</span>
       </h2>
-      <p className="hint">{kind.blurb}</p>
-      {/* Keyed siblings, so the rail keeps its position when the first tap
-          turns an empty slot into a list card above it. */}
-      {[
-        ...lists.map((l) => <List key={l.id} list={l} state={state} dispatch={dispatch} />),
-        <div key="taps" className="card taps-card">
-          <Taps type={type} state={state} dispatch={dispatch} templates={templates} list={lists[0] || null} />
-        </div>,
-      ]}
+      {!list && <p className="hint">{kind.blurb}</p>}
+      {lists.map((l) => (
+        <List key={l.id} list={l} state={state} dispatch={dispatch} />
+      ))}
+      {!list && (
+        <div className="chips-row sets">
+          {templates
+            .filter((t) => t.type === type)
+            .map((t) => (
+              <button key={t.key} className="chip r-other" onClick={() => loadSet(t)}>
+                {t.name} <em>{Math.min(r.max, parseLines(t.lines).length)}</em>
+              </button>
+            ))}
+        </div>
+      )}
+      {r.left > 0 ? (
+        <button className="primary wide add-btn" onClick={() => setAdding(true)}>
+          + Add to {kind.title.toLowerCase()}
+        </button>
+      ) : (
+        <p className="hint">Full — {r.max} is the cap. Retire something to make room.</p>
+      )}
       {lists.length > 1 && (
         <p className="hint">
           {kind.title} is one list — archive the extras. Their history stays.
         </p>
       )}
+      {adding && <AddSheet type={type} state={state} dispatch={dispatch} list={list} onClose={() => setAdding(false)} />}
     </div>
   );
 }
