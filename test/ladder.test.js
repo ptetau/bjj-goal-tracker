@@ -79,3 +79,51 @@ describe("toOptions(from): what the second tap offers", () => {
     );
   });
 });
+
+describe("ladderGraph(templates): the graph we built, as the sheet offers it", () => {
+  it("offers, from a connection, only the edges the sets contain", async () => {
+    const { ladderGraph } = await import("../src/engine/ladder.js");
+    const { DEFAULT_TEMPLATES } = await import("../src/engine/templates.js");
+    const g = ladderGraph(DEFAULT_TEMPLATES);
+    const fhl = g.edges.get("Front headlock").map((e) => e.to);
+    expect(fhl).toEqual(["Hold", "Rear body lock", "Takedown", "Guillotine", "Darce", "Anaconda"]);
+    expect(fhl).not.toContain("Collar tie"); // every other connection is NOT offered
+    expect(g.edges.get("Both standing").map((e) => e.to)).toEqual(["Collar tie", "Front headlock", "Body lock", "Single leg", "Two-on-one"]);
+  });
+
+  it("lists as froms only what has an edge, disconnected shapes first, in order of appearance", async () => {
+    const { ladderGraph } = await import("../src/engine/ladder.js");
+    const { DEFAULT_TEMPLATES } = await import("../src/engine/templates.js");
+    const g = ladderGraph(DEFAULT_TEMPLATES);
+    expect(g.froms.slice(0, 3)).toEqual(["Both standing", "They're down", "I'm down"]);
+    expect(g.froms).not.toContain("Both down"); // no set starts there yet
+    expect(g.froms).not.toContain("Wrist lock"); // a finish is never a from
+    expect(g.froms).toContain("Omoplata hub");
+    expect(new Set(g.froms).size).toBe(g.froms.length);
+  });
+
+  it("dedupes across sets, keeps the first target, and names each edge's rung", async () => {
+    const { ladderGraph, rungOf } = await import("../src/engine/ladder.js");
+    const { DEFAULT_TEMPLATES } = await import("../src/engine/templates.js");
+    const g = ladderGraph(DEFAULT_TEMPLATES);
+    const takedowns = g.edges.get("Front headlock").filter((e) => e.to === "Takedown");
+    expect(takedowns).toHaveLength(1); // in "fundamentals", "front-headlock" and "standing"
+    expect(takedowns[0].target).toBe(25);
+    for (const [from, edges] of g.edges) for (const e of edges) expect(e.rung).toBe(rungOf(from, e.to));
+  });
+
+  it("is exactly the lines of the sets it was built from, for any subset of them", async () => {
+    const { ladderGraph } = await import("../src/engine/ladder.js");
+    const { DEFAULT_TEMPLATES } = await import("../src/engine/templates.js");
+    const { parseLines } = await import("../src/engine/parse.js");
+    fc.assert(
+      fc.property(fc.subarray(DEFAULT_TEMPLATES), (sets) => {
+        const g = ladderGraph(sets);
+        const want = new Set(sets.flatMap((t) => parseLines(t.lines).map((p) => `${p.position}→${p.move}`.toLowerCase())));
+        const got = new Set([...g.edges].flatMap(([from, es]) => es.map((e) => `${from}→${e.to}`.toLowerCase())));
+        expect(got).toEqual(want);
+        expect(new Set(g.froms)).toEqual(new Set([...g.edges.keys()]));
+      })
+    );
+  });
+});

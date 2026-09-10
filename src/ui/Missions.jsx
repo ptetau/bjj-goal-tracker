@@ -17,7 +17,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { LIST_TYPES, room, targetProgress } from "../engine/actions.js";
 import { itemTitle, parseLines, toLine } from "../engine/parse.js";
 import { DEFAULT_TEMPLATES } from "../engine/templates.js";
-import { CONNECTIONS, DISCONNECTED, HOLD, RUNGS, isDisconnected, rungOf, toOptions } from "../engine/ladder.js";
+import { CONNECTIONS, DISCONNECTED, FINISHES, RUNGS, isDisconnected, ladderGraph, rungOf, toOptions } from "../engine/ladder.js";
 
 // One fetch serves the rail: the gym's server when reachable
 // (coach-owned), the shipped defaults offline.
@@ -78,29 +78,34 @@ function FromPill({ item, onClick, label }) {
   );
 }
 
-// The second tap's options, grouped for headings: connections (make or
-// transition), Hold, finishes by kind.
-function groupOptions(from) {
-  const opts = toOptions(from);
+// The second step's options, grouped for headings: Hold, connections (make
+// or transition), finishes by kind.
+function groupOptions(opts) {
   const groups = [];
   const hold = opts.filter((o) => o.rung === "maintain");
   const conns = opts.filter((o) => o.rung === "make" || o.rung === "transition");
   if (hold.length) groups.push({ title: "Maintain", rung: "maintain", options: hold });
   if (conns.length) groups.push({ title: conns[0].rung === "make" ? "Make the connection" : "Transition to", rung: conns[0].rung, options: conns });
   for (const kind of ["takedown", "position", "submission"]) {
-    const fin = opts.filter((o) => o.rung === "profit" && o.kind === kind);
+    const fin = opts.filter((o) => o.rung === "profit" && finishKind(o.to) === kind);
     if (fin.length) groups.push({ title: `Profit · ${KIND_LABEL[kind]}`, rung: "profit", options: fin });
   }
+  const off = opts.filter((o) => o.rung === "other");
+  if (off.length) groups.push({ title: "Off the ladder", rung: "other", options: off });
   return groups;
 }
+const finishKind = (to) => FINISHES.find((f) => same(f.label, to))?.kind;
 
-// The add sheet: one step at a time. Step one picks the "from" (a
-// disconnected shape or a connection); step two picks where it goes, grouped
-// by rung. A tap adds the line and stays on step two, so "Front headlock →
-// Darce" then "→ Guillotine" is two taps, not four. The first line of an
-// empty slot creates its list.
-function AddSheet({ type, state, dispatch, list, onClose }) {
+// The add sheet: one step at a time, over the graph the gym built (the
+// coach's sets). Step one picks the "from" — a disconnected shape or a
+// connection that has an edge; step two picks where it goes, only the
+// edges the sets contain, grouped by rung. A tap adds the line and stays
+// on step two, so "Front headlock → Darce" then "→ Guillotine" is two
+// taps, not four. The text box reaches the rest of the ladder. The first
+// line of an empty slot creates its list.
+function AddSheet({ type, state, dispatch, list, templates, onClose }) {
   const kind = KIND[type];
+  const graph = useMemo(() => ladderGraph(templates), [templates]);
   const [from, setFrom] = useState(null);
   const [target, setTarget] = useState(kind.defaultTarget);
   const [custom, setCustom] = useState("");
@@ -108,7 +113,7 @@ function AddSheet({ type, state, dispatch, list, onClose }) {
   const full = r.left <= 0;
   const live = list ? list.items.filter((it) => !it.retiredAt) : [];
   const has = (to) => live.some((it) => same(it.position, from) && same(it.move, to));
-  const groups = useMemo(() => (from ? groupOptions(from) : []), [from]);
+  const groups = useMemo(() => (from ? groupOptions(graph.edges.get(from) || []) : []), [from, graph]);
   const added = live.filter((it) => same(it.position, from)).length;
 
   const addLines = (lines) => {
@@ -144,17 +149,17 @@ function AddSheet({ type, state, dispatch, list, onClose }) {
           <>
             <h4 className="taps-label">Disconnected</h4>
             <div className="chips-row">
-              {DISCONNECTED.map((d) => (
-                <button key={d.label} className="chip open" title={d.hint} onClick={() => setFrom(d.label)}>
-                  {d.label}
+              {graph.froms.filter(isDisconnected).map((f) => (
+                <button key={f} className="chip open" title={DISCONNECTED.find((d) => same(d.label, f))?.hint} onClick={() => setFrom(f)}>
+                  {f}
                 </button>
               ))}
             </div>
             <h4 className="taps-label">Connections</h4>
             <div className="chips-row">
-              {CONNECTIONS.map((c) => (
-                <button key={c} className="chip r-other" onClick={() => setFrom(c)}>
-                  {c}
+              {graph.froms.filter((f) => !isDisconnected(f)).map((f) => (
+                <button key={f} className="chip r-other" onClick={() => setFrom(f)}>
+                  {f}
                 </button>
               ))}
             </div>
@@ -199,7 +204,7 @@ function AddSheet({ type, state, dispatch, list, onClose }) {
                 <input
                   type="text"
                   value={custom}
-                  placeholder="Or type where it goes"
+                  placeholder="Or type where it goes (the rest of the ladder)"
                   autoCapitalize="off"
                   autoComplete="off"
                   enterKeyHint="done"
@@ -465,7 +470,9 @@ function Slot({ type, state, dispatch, templates }) {
           {kind.title} is one list — archive the extras. Their history stays.
         </p>
       )}
-      {adding && <AddSheet type={type} state={state} dispatch={dispatch} list={list} onClose={() => setAdding(false)} />}
+      {adding && (
+        <AddSheet type={type} state={state} dispatch={dispatch} list={list} templates={templates} onClose={() => setAdding(false)} />
+      )}
     </div>
   );
 }

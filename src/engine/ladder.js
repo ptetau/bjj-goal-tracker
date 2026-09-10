@@ -10,6 +10,13 @@
 // Disconnected comes in four shapes, because "one of us is down" is two
 // different fights depending on who. Pure vocabulary and lookups: the
 // engine never rejects a line it can't place — it calls that rung "other".
+//
+// The vocabulary says what CAN be a step. The graph (ladderGraph, below)
+// says which steps the gym actually trains: the union of the coach's sets.
+// The add sheet offers the graph; the vocabulary is what the text box
+// falls back to.
+
+import { parseLines } from "./parse.js";
 
 export const DISCONNECTED = [
   { label: "Both standing", hint: "on the feet, no tie yet" },
@@ -123,4 +130,34 @@ export function toOptions(from) {
     ];
   }
   return [];
+}
+
+// The graph we built: every "from => to" across the given sets, deduped,
+// each edge carrying its rung and the first target the sets gave it. Edges
+// come in rung order (hold, then transitions, then finishes), then by first
+// appearance; froms come disconnected shapes first (those with an edge, in
+// the ladder's order), then connections by first appearance — so the
+// coach's sets are the one place the gym's map lives.
+export function ladderGraph(templates) {
+  const edges = new Map();
+  const seen = new Set();
+  for (const t of templates) {
+    for (const p of parseLines(t.lines)) {
+      if (!p.position) continue;
+      const key = `${norm(p.position)}→${norm(p.move)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (!edges.has(p.position)) edges.set(p.position, []);
+      edges.get(p.position).push({ to: p.move, rung: rungOf(p.position, p.move), target: p.target });
+    }
+  }
+  const rungIndex = (r) => RUNGS.findIndex((x) => x.key === r);
+  for (const list of edges.values()) list.sort((a, b) => rungIndex(a.rung) - rungIndex(b.rung));
+  const disIndex = (f) => DISCONNECTED.findIndex((d) => norm(d.label) === norm(f));
+  const froms = [...edges.keys()].sort((a, b) => {
+    const da = isDisconnected(a), db = isDisconnected(b);
+    if (da !== db) return da ? -1 : 1;
+    return da ? disIndex(a) - disIndex(b) : 0;
+  });
+  return { froms, edges };
 }
