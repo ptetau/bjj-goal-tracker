@@ -1,18 +1,20 @@
 // Two short lists, and only two. TOKUI WAZA is the handful of techniques
 // you do all the time — a submission, a guard, a sweep, a takedown, maybe
 // one to three more (cap 7). KAIZEN is what you're working on right now
-// (cap 3 — more than that and you're working on nothing). Each is one
-// list you keep; the tab offers a way to make one only while the slot is
-// empty. Text-first authoring: the parser structures what it can and
-// keeps the rest verbatim. Items retire rather than delete, and a met
-// target celebrates and asks — next lap, or retirement — never resets.
+// (cap 3 — more than that and you're working on nothing).
+//
+// Entry is two taps: pick the position on a rail, tap the move. Editing is
+// a grid: tap the position pill to change it, type the move (with the
+// catalogue suggesting), tap the target to cycle it. Colour is by position
+// family, so a list reads at a glance. Items retire rather than delete, and
+// a met target celebrates and asks — next lap, or retirement — never resets.
 
 import React, { useEffect, useMemo, useState } from "react";
 import { LIST_TYPES, room, targetProgress } from "../engine/actions.js";
 import { itemTitle, parseLines, toLine } from "../engine/parse.js";
-import { DEFAULT_TEMPLATES, wazaCatalogue } from "../engine/templates.js";
+import { DEFAULT_TEMPLATES, FAMILIES, familyOf, wazaCatalogue } from "../engine/templates.js";
 
-// One fetch serves the picker: the gym's server when reachable
+// One fetch serves the rail: the gym's server when reachable
 // (coach-owned), the shipped defaults offline.
 function useTemplates() {
   const [templates, setTemplates] = useState(DEFAULT_TEMPLATES);
@@ -37,53 +39,282 @@ const KIND = {
     tag: "tokui · sharpen",
     blurb: "Your special techniques: a submission, a guard, a sweep, a takedown, maybe one to three more. Hit them every session.",
     defaultName: "My tokui waza",
-    placeholder: `Back => strangle x25
-Closed guard => sweep to mount
-Standing => single leg x25`,
+    defaultTarget: 25,
   },
   growth: {
     title: "Kaizen",
     tag: "kaizen · explore",
     blurb: "What you're working on right now. More than three and you're working on nothing.",
     defaultName: "Kaizen",
-    placeholder: `Leg => inside heel hook x50
-DLR => berimbolo`,
+    defaultTarget: 50,
   },
 };
 
-function Item({ item, state, dispatch, canRestore }) {
-  const p = targetProgress(state, item);
-  const retitle = () => {
-    const line = window.prompt("Item (Position => move, optional xN target):", itemTitle(item));
-    if (line) dispatch("retitleItem", { itemId: item.id, line });
+const TARGETS = [
+  [null, "no target"],
+  [25, "x25"],
+  [50, "x50"],
+];
+const famIndex = (p) => FAMILIES.findIndex((f) => f.key === familyOf(p));
+const same = (a, b) => String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
+
+// The catalogue as a rail: positions in family order, each with its moves.
+function usePositions(templates) {
+  return useMemo(() => {
+    const groups = wazaCatalogue(templates).filter((g) => g.position);
+    return groups
+      .map((g, i) => ({ position: g.position, family: familyOf(g.position), items: g.items, order: i }))
+      .sort((a, b) => famIndex(a.position) - famIndex(b.position) || a.order - b.order);
+  }, [templates]);
+}
+
+function PositionPill({ position, onClick, label }) {
+  return (
+    <button className={`pos-pill f-${familyOf(position)}`} onClick={onClick} aria-label={label}>
+      {position || "free"}
+    </button>
+  );
+}
+
+// The rail + move grid. Two taps adds a line to the list; when the slot has
+// no list yet, the first tap creates it.
+function Taps({ type, state, dispatch, templates, list }) {
+  const kind = KIND[type];
+  const positions = usePositions(templates);
+  const [pos, setPos] = useState(positions[0]?.position ?? null);
+  const [target, setTarget] = useState(kind.defaultTarget);
+  const [custom, setCustom] = useState("");
+  const r = room(state, type);
+  const full = r.left <= 0;
+  const group = positions.find((g) => g.position === pos) || positions[0];
+  const live = list ? list.items.filter((it) => !it.retiredAt) : [];
+  const has = (move) => live.some((it) => same(it.position, group?.position) && same(it.move, move));
+
+  const addLines = (lines) => {
+    if (list) return dispatch("addLines", { listId: list.id, lines });
+    return dispatch("createList", { name: kind.defaultName, type, lines });
+  };
+  const addMove = (move) => {
+    if (full || !move.trim() || has(move)) return;
+    if (addLines(toLine({ position: group.position, move: move.trim(), target }))) setCustom("");
+  };
+  const loadSet = (t) => {
+    const lines = parseLines(t.lines).slice(0, r.max).map(toLine).join("\n");
+    dispatch("createList", { name: t.name, type, lines });
   };
 
+  const q = custom.trim().toLowerCase();
+  const suggestions = q ? (group?.items || []).filter((i) => i.move.toLowerCase().includes(q) && !same(i.move, custom)).slice(0, 6) : [];
+
   return (
-    <li className={`mission ${p?.met ? "met" : ""} ${item.retiredAt ? "retired" : ""}`}>
-      <div className="mission-head">
-        <span className="mission-title">{itemTitle(item)}</span>
-        <span className="mission-tools">
-          {!item.retiredAt && (
-            <button className="ghost tiny" onClick={retitle} aria-label={`Edit ${itemTitle(item)}`}>
-              edit
-            </button>
-          )}
-          {item.retiredAt ? (
-            <button
-              className="ghost tiny"
-              disabled={!canRestore}
-              title={canRestore ? "" : "The list is full — retire something first"}
-              onClick={() => dispatch("restoreItem", { itemId: item.id })}
-            >
-              restore
-            </button>
-          ) : (
-            <button className="ghost tiny" onClick={() => dispatch("retireItem", { itemId: item.id })}>
-              retire
-            </button>
-          )}
-        </span>
+    <div className="taps">
+      {!list && (
+        <>
+          <h4 className="taps-label">Start from a set</h4>
+          <div className="chips-row">
+            {templates
+              .filter((t) => t.type === type)
+              .map((t) => (
+                <button key={t.key} className="chip f-other" onClick={() => loadSet(t)}>
+                  {t.name} <em>{Math.min(r.max, parseLines(t.lines).length)}</em>
+                </button>
+              ))}
+          </div>
+          <h4 className="taps-label">Or pick position, then move</h4>
+        </>
+      )}
+      <div className="rail" role="group" aria-label="Position">
+        {positions.map((g) => (
+          <button
+            key={g.position}
+            className={`chip f-${g.family} ${g === group ? "on" : ""}`}
+            aria-pressed={g === group}
+            onClick={() => setPos(g.position)}
+          >
+            {g.position}
+          </button>
+        ))}
       </div>
+      <div className="tseg" role="group" aria-label="Target">
+        {TARGETS.map(([v, label]) => (
+          <button key={label} aria-pressed={target === v} onClick={() => setTarget(v)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {full ? (
+        <p className="hint">Full — {r.max} is the cap for {kind.title.toLowerCase()}. Retire something to make room.</p>
+      ) : (
+        group && (
+          <>
+            <h4 className="taps-label">
+              {group.position} — tap to add
+            </h4>
+            <div className="chips-row">
+              {group.items.map((i) => (
+                <button
+                  key={i.move}
+                  className={`chip f-${group.family} ${has(i.move) ? "on" : ""}`}
+                  disabled={has(i.move)}
+                  onClick={() => addMove(i.move)}
+                  aria-label={`Add ${group.position} → ${i.move}`}
+                >
+                  {i.move}
+                </button>
+              ))}
+            </div>
+            <div className="row taps-custom">
+              <div className="acwrap">
+                <input
+                  type="text"
+                  value={custom}
+                  placeholder={`Or type a ${group.position} move`}
+                  autoCapitalize="off"
+                  autoComplete="off"
+                  enterKeyHint="done"
+                  aria-label={`Custom ${group.position} move`}
+                  onChange={(e) => setCustom(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addMove(custom);
+                    }
+                  }}
+                />
+                {suggestions.length > 0 && (
+                  <div className="ac">
+                    {suggestions.map((i) => (
+                      <button key={i.move} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => addMove(i.move)}>
+                        {i.move}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button className="primary" onClick={() => addMove(custom)} disabled={!custom.trim() || has(custom)}>
+                Add
+              </button>
+            </div>
+          </>
+        )
+      )}
+    </div>
+  );
+}
+
+// One editable row of the grid.
+function Row({ item, state, dispatch, positions, canRestore }) {
+  const [picking, setPicking] = useState(false);
+  const [move, setMove] = useState(item.move);
+  const [focus, setFocus] = useState(false);
+  useEffect(() => setMove(item.move), [item.move]);
+  const p = targetProgress(state, item);
+  const family = familyOf(item.position);
+  const group = positions.find((g) => same(g.position, item.position));
+
+  const retitle = (position, nextMove) => {
+    const m = (nextMove ?? move).trim();
+    if (!m) {
+      setMove(item.move);
+      return;
+    }
+    if (same(position, item.position) && m === item.move) return;
+    dispatch("retitleItem", { itemId: item.id, line: toLine({ position, move: m, target: null }) });
+  };
+  const cycleTarget = () => {
+    const next = item.target === null ? 25 : item.target === 25 ? 50 : null;
+    dispatch("setTarget", { itemId: item.id, target: next });
+  };
+
+  const q = move.trim().toLowerCase();
+  const pool = group ? group.items : [];
+  const suggestions = focus && q ? pool.filter((i) => i.move.toLowerCase().includes(q) && i.move !== move).slice(0, 5) : [];
+  const known = [...positions.map((g) => g.position)];
+  if (item.position && !known.some((x) => same(x, item.position))) known.unshift(item.position);
+
+  return (
+    <li className={`mission row-edit f-${family} ${p?.met ? "met" : ""} ${item.retiredAt ? "retired" : ""}`}>
+      <div className="row-line">
+        <PositionPill
+          position={item.position}
+          label={`Position: ${item.position || "free-form"}. Tap to change`}
+          onClick={() => !item.retiredAt && setPicking((v) => !v)}
+        />
+        {item.retiredAt ? (
+          <span className="row-move">{item.move}</span>
+        ) : (
+          <div className="acwrap row-move">
+            <input
+              type="text"
+              value={move}
+              aria-label={`Move for ${itemTitle(item)}`}
+              autoCapitalize="off"
+              autoComplete="off"
+              onChange={(e) => setMove(e.target.value)}
+              onFocus={() => setFocus(true)}
+              onBlur={() => {
+                setFocus(false);
+                retitle(item.position);
+              }}
+              onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
+            />
+            {suggestions.length > 0 && (
+              <div className="ac">
+                {suggestions.map((i) => (
+                  <button key={i.move} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setMove(i.move); retitle(item.position, i.move); }}>
+                    {i.move}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {!item.retiredAt && (
+          <button className="tgt-btn" onClick={cycleTarget} aria-label={`Target ${item.target ? `x${item.target}` : "none"}. Tap to change`}>
+            {item.target ? `x${item.target}` : "—"}
+          </button>
+        )}
+        {item.retiredAt ? (
+          <button
+            className="ghost tiny"
+            disabled={!canRestore}
+            title={canRestore ? "" : "The list is full — retire something first"}
+            onClick={() => dispatch("restoreItem", { itemId: item.id })}
+          >
+            restore
+          </button>
+        ) : (
+          <button className="xbtn" onClick={() => dispatch("retireItem", { itemId: item.id })} aria-label={`Retire ${itemTitle(item)}`}>
+            ×
+          </button>
+        )}
+      </div>
+
+      {picking && (
+        <div className="chips-row picker">
+          {known.map((x) => (
+            <button
+              key={x}
+              className={`chip f-${familyOf(x)} ${same(x, item.position) ? "on" : ""}`}
+              onClick={() => {
+                setPicking(false);
+                retitle(x);
+              }}
+            >
+              {x}
+            </button>
+          ))}
+          <button
+            className={`chip f-other ${!item.position ? "on" : ""}`}
+            onClick={() => {
+              setPicking(false);
+              retitle(null);
+            }}
+          >
+            free-form
+          </button>
+        </div>
+      )}
 
       {p && (
         <>
@@ -103,9 +334,7 @@ function Item({ item, state, dispatch, canRestore }) {
           {p.met && !item.retiredAt && (
             <div className="celebrate">
               <strong>🏅 Lap {p.lap} done!</strong>
-              <button onClick={() => dispatch("startNextLap", { itemId: item.id })}>
-                next {p.target} →
-              </button>
+              <button onClick={() => dispatch("startNextLap", { itemId: item.id })}>next {p.target} →</button>
               <button className="ghost" onClick={() => dispatch("retireItem", { itemId: item.id })}>
                 retire it
               </button>
@@ -117,21 +346,16 @@ function Item({ item, state, dispatch, canRestore }) {
   );
 }
 
-function List({ list, state, dispatch }) {
-  const [lines, setLines] = useState("");
+function List({ list, state, dispatch, templates }) {
+  const positions = usePositions(templates);
   const active = list.items.filter((it) => !it.retiredAt);
   const retired = list.items.filter((it) => it.retiredAt);
   const [showRetired, setShowRetired] = useState(false);
   const r = room(state, list.type);
-  const adding = parseLines(lines).length;
 
   const rename = () => {
     const name = window.prompt("List name:", list.name);
     if (name) dispatch("renameList", { listId: list.id, name });
-  };
-
-  const add = () => {
-    if (dispatch("addLines", { listId: list.id, lines })) setLines("");
   };
 
   return (
@@ -150,10 +374,10 @@ function List({ list, state, dispatch }) {
 
       <ul className="mission-list">
         {active.map((it) => (
-          <Item key={it.id} item={it} state={state} dispatch={dispatch} />
+          <Row key={it.id} item={it} state={state} dispatch={dispatch} positions={positions} />
         ))}
       </ul>
-      {active.length === 0 && <p className="hint">Empty list — add some lines below.</p>}
+      {active.length === 0 && <p className="hint">Empty list — tap a position and a move below.</p>}
 
       {retired.length > 0 && (
         <>
@@ -163,158 +387,23 @@ function List({ list, state, dispatch }) {
           {showRetired && (
             <ul className="mission-list">
               {retired.map((it) => (
-                <Item key={it.id} item={it} state={state} dispatch={dispatch} canRestore={r.left > 0} />
+                <Row key={it.id} item={it} state={state} dispatch={dispatch} positions={positions} canRestore={r.left > 0} />
               ))}
             </ul>
           )}
         </>
       )}
 
-      {r.left > 0 ? (
-        <div className="add-lines">
-          <textarea
-            rows={2}
-            value={lines}
-            placeholder={`Add up to ${r.left} more — one per line`}
-            onChange={(e) => setLines(e.target.value)}
-          />
-          <button className="ghost" onClick={add} disabled={adding === 0 || adding > r.left}>
-            Add
-          </button>
-        </div>
-      ) : (
-        <p className="hint">
-          Full — {r.max} is the cap for {KIND[list.type].title.toLowerCase()}. Retire something to make room.
-        </p>
-      )}
-      {adding > r.left && r.left > 0 && (
-        <p className="hint">
-          That's {adding} lines, room for {r.left}. Trim it, or retire something first.
-        </p>
-      )}
-    </div>
-  );
-}
-
-// Pick-your-weapons: compose the tokui list technique by technique, up to
-// the cap. The catalogue derives from the coach's template sets, so their
-// edits flow through; Fundamentals items arrive pre-checked, and any set
-// can be loaded as a preset (trimmed to the cap) to start from.
-function WazaPicker({ templates, dispatch, max, onWrite }) {
-  const groups = useMemo(() => wazaCatalogue(templates), [templates]);
-  const keyOf = (i) => `${i.position ?? ""}→${i.move}`.toLowerCase();
-  const [picked, setPicked] = useState(
-    () => new Set(groups.flatMap((g) => g.items.filter((i) => i.recommended).map(keyOf)).slice(0, max))
-  );
-  const full = picked.size >= max;
-
-  const toggle = (i) =>
-    setPicked((s) => {
-      const next = new Set(s);
-      const k = keyOf(i);
-      if (next.has(k)) next.delete(k);
-      else if (next.size < max) next.add(k);
-      return next;
-    });
-
-  const loadSet = (t) =>
-    setPicked(new Set(parseLines(t.lines).map((p) => `${p.position ?? ""}→${p.move}`.toLowerCase()).slice(0, max)));
-
-  const create = () => {
-    const items = groups.flatMap((g) => g.items.filter((i) => picked.has(keyOf(i))));
-    const lines = items.map(toLine).join("\n");
-    dispatch("createList", { name: KIND.tokui.defaultName, type: "tokui", lines });
-  };
-
-  return (
-    <div className="card">
-      <h3>Pick your tokui waza</h3>
-      <p className="hint">
-        Tap up to {max}. The starters are pre-picked — add your weapons, drop what isn't you.
-      </p>
-      <div className="waza-group">
-        <h4>Start from a set</h4>
-        <div className="chips-row">
-          {templates
-            .filter((t) => t.type === "tokui")
-            .map((t) => (
-              <button key={t.key} className="chip" onClick={() => loadSet(t)}>
-                {t.name}
-              </button>
-            ))}
-        </div>
-      </div>
-      {groups.map((g) => (
-        <div key={g.label} className="waza-group">
-          <h4>{g.label}</h4>
-          <div className="chips-row">
-            {g.items.map((i) => {
-              const on = picked.has(keyOf(i));
-              return (
-                <button
-                  key={keyOf(i)}
-                  className={`chip ${on ? "on" : ""}`}
-                  aria-pressed={on}
-                  disabled={!on && full}
-                  onClick={() => toggle(i)}
-                  title={`From: ${i.sources.join(", ")}`}
-                >
-                  {i.move}
-                  {i.target ? <em> x{i.target}</em> : null}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-      <button className="primary wide" style={{ marginTop: 12 }} onClick={create} disabled={picked.size === 0}>
-        Create my tokui list ({picked.size} of {max})
-      </button>
-      <button className="ghost wide" onClick={onWrite}>
-        or write your own lines
-      </button>
-    </div>
-  );
-}
-
-// Write the list as lines — the only way to make a kaizen list, and the
-// alternative to the picker for tokui. Capped like everything else.
-function NewList({ type, dispatch, max }) {
-  const kind = KIND[type];
-  const [name, setName] = useState(kind.defaultName);
-  const [lines, setLines] = useState("");
-  const n = parseLines(lines).length;
-
-  return (
-    <div className="card form">
-      <h3>Write your {kind.title.toLowerCase()} list</h3>
-      <label>
-        List name
-        <input value={name} onChange={(e) => setName(e.target.value)} />
-      </label>
-      <label>
-        Up to {max} items — one per line, <code>Position =&gt; move</code>, optional <code>x50</code> target
-        <textarea rows={type === "tokui" ? 6 : 3} value={lines} placeholder={kind.placeholder} onChange={(e) => setLines(e.target.value)} />
-      </label>
-      {n > max && (
-        <p className="hint">
-          That's {n} lines — the cap is {max}. Keep the ones you'll actually do.
-        </p>
-      )}
-      <button className="primary" onClick={() => dispatch("createList", { name, type, lines })} disabled={n === 0 || n > max}>
-        Create list ({n} of {max})
-      </button>
     </div>
   );
 }
 
 // One slot per kind. While the slot has a list, it shows it; while it is
-// empty, it offers the one way to fill it.
+// empty, the same two taps create it.
 function Slot({ type, state, dispatch, templates }) {
   const kind = KIND[type];
   const lists = state.lists.filter((l) => l.type === type && !l.archivedAt);
   const r = room(state, type);
-  const [writing, setWriting] = useState(false);
 
   return (
     <div className="slot">
@@ -322,15 +411,14 @@ function Slot({ type, state, dispatch, templates }) {
         {kind.title} <span className={`list-tag list-${type}`}>{r.live} of {r.max}</span>
       </h2>
       <p className="hint">{kind.blurb}</p>
-      {lists.length === 0 &&
-        (type === "tokui" && !writing ? (
-          <WazaPicker templates={templates} dispatch={dispatch} max={r.max} onWrite={() => setWriting(true)} />
-        ) : (
-          <NewList type={type} dispatch={dispatch} max={r.max} />
-        ))}
-      {lists.map((l) => (
-        <List key={l.id} list={l} state={state} dispatch={dispatch} />
-      ))}
+      {/* Keyed siblings, so the rail keeps its position when the first tap
+          turns an empty slot into a list card above it. */}
+      {[
+        ...lists.map((l) => <List key={l.id} list={l} state={state} dispatch={dispatch} templates={templates} />),
+        <div key="taps" className="card taps-card">
+          <Taps type={type} state={state} dispatch={dispatch} templates={templates} list={lists[0] || null} />
+        </div>,
+      ]}
       {lists.length > 1 && (
         <p className="hint">
           {kind.title} is one list — archive the extras. Their history stays.
@@ -347,6 +435,13 @@ export default function Missions({ state, dispatch }) {
 
   return (
     <section aria-label="Mission lists">
+      <div className="legend" aria-label="Colour key">
+        {FAMILIES.map((f) => (
+          <span key={f.key}>
+            <i className={`f-${f.key}`} aria-hidden="true" /> {f.label}
+          </span>
+        ))}
+      </div>
       {LIST_TYPES.map((type) => (
         <Slot key={type} type={type} state={state} dispatch={dispatch} templates={templates} />
       ))}

@@ -7,6 +7,32 @@
 
 import { parseLines } from "./parse.js";
 
+// Position families: the colour coding on the Missions tab. A grappler
+// groups positions by where the fight is — standing, under someone's
+// guard game, on top passing, controlling from mount or the back, or in
+// the legs — so a list reads at a glance. Anything unrecognised (a hub like
+// "Triangle", a free-form item) falls under "other".
+export const FAMILIES = [
+  { key: "standing", label: "Standing" },
+  { key: "guard", label: "Guard & bottom" },
+  { key: "top", label: "Top & passing" },
+  { key: "back", label: "Mount, back, turtle" },
+  { key: "legs", label: "Legs" },
+  { key: "other", label: "Other" },
+];
+
+const FAMILY_OF = {
+  standing: "standing",
+  guard: "guard", "closed guard": "guard", "half guard": "guard", "x-guard": "guard", slx: "guard", lasso: "guard",
+  dlr: "guard", rdlr: "guard", "collar sleeve": "guard", bottom: "guard", "mount bottom": "guard",
+  top: "top", "side control": "top",
+  mount: "back", back: "back", turtle: "back",
+  leg: "legs",
+};
+
+export const familyOf = (position) =>
+  FAMILY_OF[String(position ?? "").trim().toLowerCase().replace(/\s+/g, " ")] || "other";
+
 // The waza catalogue behind the picker: every technique across the template
 // sets, grouped by position and deduplicated, remembering which sets it
 // came from. Fundamentals items are the pre-checked default selection —
