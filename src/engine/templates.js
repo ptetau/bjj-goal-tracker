@@ -38,7 +38,8 @@ Front headlock => Anaconda x25`,
 Body lock => Hold
 Body lock => Rear body lock
 Body lock => Takedown x25
-Rear body lock => Takedown x25
+Body lock => Takedown => Ko soto gari x25
+Body lock => Takedown => Ouchi gari x25
 Rear body lock => Back x25`,
   },
   {
@@ -49,6 +50,7 @@ Rear body lock => Back x25`,
 Single leg => Hold
 Single leg => Rear body lock
 Single leg => Takedown x25
+Single leg => Takedown => Run the pipe x25
 Single leg => Back x25`,
   },
   {
@@ -92,7 +94,8 @@ Closed guard => Hold
 Closed guard => Triangle x25
 Closed guard => Armbar x25
 Closed guard => Seatbelt
-Closed guard => Mount x25`,
+Closed guard => Mount => Hip bump sweep x25
+Closed guard => Mount => Flower sweep x25`,
   },
   {
     key: "half-guard",
@@ -102,7 +105,7 @@ Closed guard => Mount x25`,
 Knee shield => Underhook
 Underhook => Hold
 Underhook => Seatbelt
-Underhook => Mount x25
+Underhook => Mount => Old school sweep x25
 Underhook => Side control x25`,
   },
   {

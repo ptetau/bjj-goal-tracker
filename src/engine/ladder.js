@@ -86,6 +86,17 @@ export const FINISHES = [
 
 export const HOLD = "Hold";
 
+// How much control a connection gives, so a step can be read as up, level
+// or down. Weak ties you get to from neutral; strong ties decide the
+// exchange (the gym scores a takedown from a strong tie double); dominant
+// ties are a finish waiting to happen. Disconnected sits below all of them;
+// a finish is not a rank but a phase change. One table, easy to argue with.
+export const CONTROL = {
+  weak: ["Collar tie", "Two-on-one", "Underhook", "Collar and sleeve", "Lasso", "DLR hook", "RDLR hook", "Butterfly hooks", "K guard", "Knee shield", "Open entanglement", "Cross face"],
+  strong: ["Front headlock", "Body lock", "Single leg", "Double underhooks", "Closed guard", "Inside entanglement", "Outside entanglement", "Closed entanglement", "Triangle hub", "Omoplata hub"],
+  dominant: ["Rear body lock", "Seatbelt", "Gift wrap", "Crowbar", "Shoulder lever"],
+};
+
 export const RUNGS = [
   { key: "make", label: "Make", blurb: "from disconnected to a connection" },
   { key: "maintain", label: "Maintain", blurb: "hold the connection" },
@@ -104,12 +115,27 @@ const DIS = new Set(DISCONNECTED.map((d) => norm(d.label)));
 const CON = new Set(CONNECTIONS.map(norm));
 const FIN = new Set(FINISHES.map((f) => norm(f.label)));
 
+const RANK = new Map([
+  ...CONTROL.weak.map((c) => [norm(c), 1]),
+  ...CONTROL.strong.map((c) => [norm(c), 2]),
+  ...CONTROL.dominant.map((c) => [norm(c), 3]),
+]);
+
 export const isDisconnected = (s) => DIS.has(norm(s));
 export const isConnection = (s) => CON.has(norm(s));
 export const isFinish = (s) => FIN.has(norm(s));
 export const isHold = (s) => norm(s) === norm(HOLD);
 
-export function rungOf(from, to) {
+// A destination may carry a name: "Body lock => Takedown => Ko soto gari"
+// parses to move "Takedown → Ko soto gari". The first part is the step on
+// the ladder; the rest is what the gym calls it.
+export function splitMove(move) {
+  const [to, ...rest] = String(move ?? "").split(" → ");
+  return { to: to.trim(), label: rest.length ? rest.join(" → ").trim() : null };
+}
+
+export function rungOf(from, move) {
+  const { to } = splitMove(move);
   if (!from) return "other";
   if (isDisconnected(from)) return isFinish(to) ? "profit" : "make";
   if (isHold(to) || norm(to) === norm(from)) return "maintain";
@@ -117,6 +143,33 @@ export function rungOf(from, to) {
   if (isConnection(to)) return "transition";
   return "other";
 }
+
+// 0 disconnected, 1 weak, 2 strong, 3 dominant, 4 a finish; null unknown.
+export function controlOf(name) {
+  if (isDisconnected(name)) return 0;
+  if (isFinish(name)) return 4;
+  return RANK.get(norm(name)) ?? null;
+}
+
+// The step read as control: up, level, down, a phase change, a hold — or
+// other when an end is unknown.
+export function climbOf(from, move) {
+  const { to } = splitMove(move);
+  if (isHold(to) || (from && norm(to) === norm(from))) return "hold";
+  const a = controlOf(from), b = controlOf(to);
+  if (a === null || b === null) return "other";
+  if (b === 4) return "phase";
+  return b > a ? "up" : b < a ? "down" : "level";
+}
+
+export const CLIMBS = [
+  { key: "hold", label: "Hold it" },
+  { key: "up", label: "Better connection" },
+  { key: "level", label: "Similar connection" },
+  { key: "down", label: "Less control" },
+  { key: "phase", label: "Phase change" },
+  { key: "other", label: "Off the ladder" },
+];
 
 // What the second tap offers once the first has picked a "from".
 export function toOptions(from) {
@@ -133,9 +186,10 @@ export function toOptions(from) {
 }
 
 // The graph we built: every "from => to" across the given sets, deduped,
-// each edge carrying its rung and the first target the sets gave it. Edges
-// come in rung order (hold, then transitions, then finishes), then by first
-// appearance; froms come disconnected shapes first (those with an edge, in
+// each edge carrying its rung, its climb and the first target the sets gave
+// it; a named step ("=> Takedown => Ko soto gari") is its own edge beside
+// the plain one. Edges come in climb order (hold, up, level, down, phase),
+// then by first appearance; froms come disconnected shapes first (those with an edge, in
 // the ladder's order), then connections by first appearance — so the
 // coach's sets are the one place the gym's map lives.
 export function ladderGraph(templates) {
@@ -148,11 +202,19 @@ export function ladderGraph(templates) {
       if (seen.has(key)) continue;
       seen.add(key);
       if (!edges.has(p.position)) edges.set(p.position, []);
-      edges.get(p.position).push({ to: p.move, rung: rungOf(p.position, p.move), target: p.target });
+      const { to, label } = splitMove(p.move);
+      edges.get(p.position).push({
+        to,
+        label,
+        move: p.move,
+        rung: rungOf(p.position, p.move),
+        climb: climbOf(p.position, p.move),
+        target: p.target,
+      });
     }
   }
-  const rungIndex = (r) => RUNGS.findIndex((x) => x.key === r);
-  for (const list of edges.values()) list.sort((a, b) => rungIndex(a.rung) - rungIndex(b.rung));
+  const climbIndex = (c) => CLIMBS.findIndex((x) => x.key === c);
+  for (const list of edges.values()) list.sort((a, b) => climbIndex(a.climb) - climbIndex(b.climb));
   const disIndex = (f) => DISCONNECTED.findIndex((d) => norm(d.label) === norm(f));
   const froms = [...edges.keys()].sort((a, b) => {
     const da = isDisconnected(a), db = isDisconnected(b);

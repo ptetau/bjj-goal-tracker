@@ -120,10 +120,56 @@ describe("ladderGraph(templates): the graph we built, as the sheet offers it", (
       fc.property(fc.subarray(DEFAULT_TEMPLATES), (sets) => {
         const g = ladderGraph(sets);
         const want = new Set(sets.flatMap((t) => parseLines(t.lines).map((p) => `${p.position}→${p.move}`.toLowerCase())));
-        const got = new Set([...g.edges].flatMap(([from, es]) => es.map((e) => `${from}→${e.to}`.toLowerCase())));
+        const got = new Set([...g.edges].flatMap(([from, es]) => es.map((e) => `${from}→${e.move}`.toLowerCase())));
         expect(got).toEqual(want);
         expect(new Set(g.froms)).toEqual(new Set([...g.edges.keys()]));
       })
     );
+  });
+});
+
+describe("control: is the step up, level, or a phase change?", () => {
+  it("ranks connections weak < strong < dominant, disconnected below, finishes as a phase", async () => {
+    const { controlOf, climbOf } = await import("../src/engine/ladder.js");
+    expect(controlOf("Both standing")).toBe(0);
+    expect(controlOf("Collar tie")).toBe(1);
+    expect(controlOf("Front headlock")).toBe(2);
+    expect(controlOf("Rear body lock")).toBe(3);
+    expect(controlOf("Darce")).toBe(4);
+    expect(controlOf("quad pod")).toBe(null);
+    expect(climbOf("Both standing", "Collar tie")).toBe("up");
+    expect(climbOf("Collar tie", "Front headlock")).toBe("up");
+    expect(climbOf("Front headlock", "Body lock")).toBe("level");
+    expect(climbOf("Front headlock", "Collar tie")).toBe("down");
+    expect(climbOf("Front headlock", "Takedown")).toBe("phase");
+    expect(climbOf("Front headlock", "Hold")).toBe("hold");
+    expect(climbOf("Front headlock", "snap to turtle")).toBe("other");
+  });
+
+  it("every connection in the vocabulary has a rank", async () => {
+    const { CONNECTIONS, controlOf } = await import("../src/engine/ladder.js");
+    for (const c of CONNECTIONS) expect([1, 2, 3], c).toContain(controlOf(c));
+  });
+});
+
+describe("named steps: 'from => to => label'", () => {
+  it("splits the label off the destination, and classifies by the destination", async () => {
+    const { splitMove, rungOf, climbOf } = await import("../src/engine/ladder.js");
+    const { parseLine } = await import("../src/engine/parse.js");
+    const p = parseLine("Body lock => Takedown => Ko soto gari x25");
+    expect(p.position).toBe("Body lock");
+    expect(splitMove(p.move)).toEqual({ to: "Takedown", label: "Ko soto gari" });
+    expect(splitMove("Darce")).toEqual({ to: "Darce", label: null });
+    expect(rungOf(p.position, p.move)).toBe("profit");
+    expect(climbOf(p.position, p.move)).toBe("phase");
+  });
+
+  it("the graph keeps labelled edges apart from the plain one, on the same destination", async () => {
+    const { ladderGraph } = await import("../src/engine/ladder.js");
+    const { DEFAULT_TEMPLATES } = await import("../src/engine/templates.js");
+    const g = ladderGraph(DEFAULT_TEMPLATES);
+    const bl = g.edges.get("Body lock").filter((e) => e.to === "Takedown");
+    expect(bl.map((e) => e.label)).toEqual(expect.arrayContaining([null, "Ko soto gari", "Ouchi gari"]));
+    for (const [from, es] of g.edges) for (const e of es) expect(["up", "level", "down", "phase", "hold"], `${from} => ${e.to}`).toContain(e.climb);
   });
 });

@@ -17,7 +17,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { LIST_TYPES, room, targetProgress } from "../engine/actions.js";
 import { itemTitle, parseLines, toLine } from "../engine/parse.js";
 import { DEFAULT_TEMPLATES } from "../engine/templates.js";
-import { CONNECTIONS, DISCONNECTED, FINISHES, RUNGS, isDisconnected, ladderGraph, rungOf, toOptions } from "../engine/ladder.js";
+import { CLIMBS, CONNECTIONS, DISCONNECTED, RUNGS, isDisconnected, ladderGraph, rungOf, toOptions } from "../engine/ladder.js";
 
 // One fetch serves the rail: the gym's server when reachable
 // (coach-owned), the shipped defaults offline.
@@ -66,7 +66,6 @@ const same = (a, b) =>
 // The first tap's rail: the four disconnected shapes, then every connection.
 const FROMS = [...DISCONNECTED.map((d) => d.label), ...CONNECTIONS];
 const RUNG_LABEL = Object.fromEntries(RUNGS.map((r) => [r.key, r.label]));
-const KIND_LABEL = { takedown: "Takedown", position: "Pins and back", submission: "Submissions" };
 
 // The "from" pill, coloured by the rung the whole item lands on.
 function FromPill({ item, onClick, label }) {
@@ -78,31 +77,23 @@ function FromPill({ item, onClick, label }) {
   );
 }
 
-// The second step's options, grouped for headings: Hold, connections (make
-// or transition), finishes by kind.
-function groupOptions(opts) {
-  const groups = [];
-  const hold = opts.filter((o) => o.rung === "maintain");
-  const conns = opts.filter((o) => o.rung === "make" || o.rung === "transition");
-  if (hold.length) groups.push({ title: "Maintain", rung: "maintain", options: hold });
-  if (conns.length) groups.push({ title: conns[0].rung === "make" ? "Make the connection" : "Transition to", rung: conns[0].rung, options: conns });
-  for (const kind of ["takedown", "position", "submission"]) {
-    const fin = opts.filter((o) => o.rung === "profit" && finishKind(o.to) === kind);
-    if (fin.length) groups.push({ title: `Profit · ${KIND_LABEL[kind]}`, rung: "profit", options: fin });
-  }
-  const off = opts.filter((o) => o.rung === "other");
-  if (off.length) groups.push({ title: "Off the ladder", rung: "other", options: off });
-  return groups;
+// The second step's options, grouped by what the step does to your control:
+// hold it, a better connection, a similar one, less control, a phase change
+// (submission, takedown, pin). A named step ("Takedown · Ko soto gari")
+// sits beside its plain one.
+function groupEdges(edges) {
+  return CLIMBS.map((c) => ({ ...c, options: edges.filter((e) => e.climb === c.key) })).filter((g) => g.options.length);
 }
-const finishKind = (to) => FINISHES.find((f) => same(f.label, to))?.kind;
 
 // The add sheet: one step at a time, over the graph the gym built (the
 // coach's sets). Step one picks the "from" — a disconnected shape or a
 // connection that has an edge; step two picks where it goes, only the
-// edges the sets contain, grouped by rung. A tap adds the line and stays
-// on step two, so "Front headlock → Darce" then "→ Guillotine" is two
-// taps, not four. The text box reaches the rest of the ladder. The first
-// line of an empty slot creates its list.
+// edges the sets contain, grouped by what they do to your control. A tap
+// adds the line and stays on step two, so "Front headlock → Darce" then
+// "→ Guillotine" is two taps, not four; tapping a chip again takes it back
+// (the item retires, and a third tap restores it — history is kept). The
+// text box reaches the rest of the ladder. The first line of an empty slot
+// creates its list.
 function AddSheet({ type, state, dispatch, list, templates, onClose }) {
   const kind = KIND[type];
   const graph = useMemo(() => ladderGraph(templates), [templates]);
@@ -111,19 +102,27 @@ function AddSheet({ type, state, dispatch, list, templates, onClose }) {
   const [custom, setCustom] = useState("");
   const r = room(state, type);
   const full = r.left <= 0;
-  const live = list ? list.items.filter((it) => !it.retiredAt) : [];
-  const has = (to) => live.some((it) => same(it.position, from) && same(it.move, to));
-  const groups = useMemo(() => (from ? groupOptions(graph.edges.get(from) || []) : []), [from, graph]);
-  const added = live.filter((it) => same(it.position, from)).length;
+  const items = list ? list.items : [];
+  const find = (move) => items.find((it) => same(it.position, from) && same(it.move, move));
+  const has = (move) => !!find(move) && !find(move).retiredAt;
+  const groups = useMemo(() => (from ? groupEdges(graph.edges.get(from) || []) : []), [from, graph]);
+  const added = items.filter((it) => !it.retiredAt && same(it.position, from)).length;
 
   const addLines = (lines) => {
     if (list) return dispatch("addLines", { listId: list.id, lines });
     return dispatch("createList", { name: kind.defaultName, type, lines });
   };
-  const addTo = (to) => {
-    if (full || !to.trim() || has(to)) return;
-    if (addLines(toLine({ position: from, move: to.trim(), target }))) setCustom("");
+  // Tap adds; tap again takes it back; a third tap brings it back.
+  const toggle = (move) => {
+    const m = move.trim();
+    if (!m) return;
+    const existing = find(m);
+    if (existing && !existing.retiredAt) return dispatch("retireItem", { itemId: existing.id });
+    if (existing) return !full && dispatch("restoreItem", { itemId: existing.id });
+    if (full) return;
+    if (addLines(toLine({ position: from, move: m, target }))) setCustom("");
   };
+  const addTo = toggle;
 
   const q = custom.trim().toLowerCase();
   const suggestions = q && from ? toOptions(from).filter((o) => o.to.toLowerCase().includes(q) && !same(o.to, custom)).slice(0, 6) : [];
@@ -167,10 +166,10 @@ function AddSheet({ type, state, dispatch, list, templates, onClose }) {
         )}
 
         {from && full && (
-          <p className="hint">Full — {r.max} is the cap for {kind.title.toLowerCase()}. Retire something to make room.</p>
+          <p className="hint">Full — {r.max} is the cap for {kind.title.toLowerCase()}. Tap a lit chip to take it back.</p>
         )}
 
-        {from && !full && (
+        {from && (
           <>
             <div className="tseg" role="group" aria-label="Target">
               {TARGETS.map(([v, label]) => (
@@ -180,20 +179,19 @@ function AddSheet({ type, state, dispatch, list, templates, onClose }) {
               ))}
             </div>
             {groups.map((g) => (
-              <div key={g.title}>
-                <h4 className="taps-label">
-                  <span className={`rung-tag r-${g.rung}`}>{g.title}</span>
-                </h4>
+              <div key={g.key}>
+                <h4 className="taps-label">{g.label}</h4>
                 <div className="chips-row">
                   {g.options.map((o) => (
                     <button
-                      key={o.to}
-                      className={`chip r-${o.rung} ${has(o.to) ? "on" : ""}`}
-                      disabled={has(o.to)}
-                      onClick={() => addTo(o.to)}
-                      aria-label={`Add ${from} → ${o.to}`}
+                      key={o.move}
+                      className={`chip r-${o.rung} ${has(o.move) ? "on" : ""}`}
+                      aria-pressed={has(o.move)}
+                      onClick={() => toggle(o.move)}
+                      aria-label={`${has(o.move) ? "Remove" : "Add"} ${from} → ${o.move}`}
                     >
                       {o.to}
+                      {o.label && <em> · {o.label}</em>}
                     </button>
                   ))}
                 </div>
@@ -204,7 +202,7 @@ function AddSheet({ type, state, dispatch, list, templates, onClose }) {
                 <input
                   type="text"
                   value={custom}
-                  placeholder="Or type where it goes (the rest of the ladder)"
+                  placeholder="Or type where it goes, e.g. Takedown => Ko soto gari"
                   autoCapitalize="off"
                   autoComplete="off"
                   enterKeyHint="done"
@@ -227,7 +225,7 @@ function AddSheet({ type, state, dispatch, list, templates, onClose }) {
                   </div>
                 )}
               </div>
-              <button className="primary" onClick={() => addTo(custom)} disabled={!custom.trim() || has(custom)}>
+              <button className="primary" onClick={() => addTo(custom)} disabled={!custom.trim() || has(custom) || full}>
                 Add
               </button>
             </div>

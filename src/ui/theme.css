@@ -524,6 +524,7 @@ section > .hint { color: var(--chalk-dim); }
 .chip.on { background: var(--f, var(--r-other)); border-color: var(--f, var(--r-other)); color: #fff; }
 .chip.on em { color: rgba(255, 255, 255, 0.8); }
 .chip:disabled { opacity: 0.5; }
+.chip.on em { color: rgba(255, 255, 255, 0.85); }
 /* the four disconnected shapes: the ladder's floor, drawn open */
 .chip.open { border-left-style: dashed; border-left-color: var(--ink-faint); }
 .chip.open.on { background: var(--ink); border-color: var(--ink); color: #fff; }
