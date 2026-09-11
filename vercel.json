@@ -2,6 +2,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/sync.js": { "includeFiles": "server/**" }
+    "api/sync.js": { "includeFiles": "server/**" },
+    "api/templates.js": { "includeFiles": "server/**" }
   }
 }

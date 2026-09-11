@@ -294,17 +294,18 @@ export function tallies(session) {
   return map;
 }
 
-// The pads for the training-mode screen: one bank per list type (tokui,
-// then growth), each holding the live items of that type's unarchived
-// lists in list order. A bank with nothing live is left out, so the screen
-// only offers a swipe when there is somewhere to swipe to.
+// The pads for the training-mode screen: always one bank per list type
+// (tokui, then growth), each holding the live items of that type's
+// unarchived lists in list order. A bank with nothing live comes back
+// empty rather than missing — the deck shows it with a way to fill it, so
+// a person with only a tokui list can still find kaizen.
 export function liveBanks(state) {
   return LIST_TYPES.map((type) => ({
     type,
     items: state.lists
       .filter((l) => l.type === type && !l.archivedAt)
       .flatMap((l) => l.items.filter((it) => !it.retiredAt)),
-  })).filter((b) => b.items.length > 0);
+  }));
 }
 
 // How many live items a kind holds against its cap. `left` goes negative

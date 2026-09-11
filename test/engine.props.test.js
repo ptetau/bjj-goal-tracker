@@ -9,6 +9,8 @@ import { itemTitle, parseLine } from "../src/engine/parse.js";
 import { sharpnessGrid, weeklyStreak, windowSessions } from "../src/engine/stats.js";
 import { addDays, monthGrid, weekStart } from "../src/engine/dates.js";
 import { arbOpSeed, actionFromSeed, BASE_DAY, deepFreeze, playSeeds } from "./helpers.js";
+import { catalogueToRows, parseCsv, rowsToCatalogue, toCsv } from "../src/engine/sheet.js";
+import { CONNECTIONS, DISCONNECTED, FINISHES, HOLD } from "../src/engine/ladder.js";
 
 const arbSeeds = fc.array(arbOpSeed, { minLength: 1, maxLength: 60 });
 const TODAY = addDays(BASE_DAY, 27); // past every date the driver can stamp
@@ -128,11 +130,9 @@ describe("pad banks, under arbitrary legal histories", () => {
       const shown = banks.flatMap((b) => b.items.map((it) => it.id));
       expect(shown.sort()).toEqual([...expected].sort());
       expect(new Set(shown).size).toBe(shown.length);
-      // Banks come in LIST_TYPES order, never empty, each holding only its own type.
-      const order = banks.map((b) => LIST_TYPES.indexOf(b.type));
-      expect(order).toEqual([...order].sort((x, y) => x - y));
+      // Always one bank per kind, in LIST_TYPES order, each holding only its own type.
+      expect(banks.map((b) => b.type)).toEqual(LIST_TYPES);
       for (const b of banks) {
-        expect(b.items.length).toBeGreaterThan(0);
         for (const it of b.items) {
           const owner = state.lists.find((l) => l.items.includes(it));
           expect(owner.type).toBe(b.type);
@@ -256,6 +256,49 @@ describe("calendar math", () => {
 
 // The driver itself must only ever produce applicable actions — otherwise
 // the suites above quietly test less than they claim.
+describe("the coach's sheets, over arbitrary catalogues", () => {
+  it("parseCsv reads back whatever toCsv writes, cell for cell", () => {
+    const cell = fc.string({ maxLength: 12 });
+    fc.assert(
+      fc.property(fc.array(fc.array(cell, { minLength: 1, maxLength: 5 }), { maxLength: 8 }), (rows) => {
+        expect(parseCsv(toCsv(rows))).toEqual(rows);
+      })
+    );
+  });
+
+  it("a catalogue survives the trip through rows: sets in order, every line, every rank", () => {
+    const word = fc.stringMatching(/^[A-Z][a-z]{1,6}( [a-z]{1,6})?$/);
+    const from = fc.constantFrom(...DISCONNECTED.map((d) => d.label), ...CONNECTIONS);
+    const to = fc.constantFrom(HOLD, ...CONNECTIONS, ...FINISHES.map((f) => f.label));
+    const line = fc
+      .tuple(from, to, fc.option(word, { nil: null }), fc.constantFrom(null, 25, 50))
+      .map(([f, t, name, target]) => `${f} => ${t}${name ? ` => ${name}` : ""}${target ? ` x${target}` : ""}`);
+    const set = fc
+      .tuple(word, fc.constantFrom("tokui", "growth"), fc.array(line, { minLength: 1, maxLength: 7 }))
+      .map(([name, type, lines]) => ({ name, type, lines: lines.join("\n") }));
+    const control = fc
+      .uniqueArray(fc.constantFrom(...CONNECTIONS), { maxLength: 8 })
+      .chain((names) => fc.tuple(fc.constant(names), fc.array(fc.constantFrom("weak", "strong", "dominant"), { minLength: names.length, maxLength: names.length })))
+      .map(([names, ranks]) => ({
+        weak: names.filter((_, i) => ranks[i] === "weak"),
+        strong: names.filter((_, i) => ranks[i] === "strong"),
+        dominant: names.filter((_, i) => ranks[i] === "dominant"),
+      }));
+    fc.assert(
+      fc.property(fc.uniqueArray(set, { maxLength: 6, selector: (s) => s.name.toLowerCase() }), control, (templates, ctl) => {
+        const back = rowsToCatalogue(catalogueToRows({ templates, control: ctl }));
+        expect(back.templates.map((t) => [t.name, t.type, t.lines])).toEqual(templates.map((t) => [t.name, t.type, t.lines]));
+        expect(back.control).toEqual(ctl);
+        // and the rows themselves survive a trip through CSV text
+        const rows = catalogueToRows({ templates, control: ctl });
+        expect(parseCsv(toCsv(rows.graph))).toEqual(rows.graph);
+        expect(parseCsv(toCsv(rows.ranks))).toEqual(rows.ranks);
+      }),
+      { numRuns: 60 }
+    );
+  });
+});
+
 describe("the seed driver", () => {
   it("every non-null action applies cleanly", () => {
     fc.assert(fc.property(arbSeeds, (seeds) => {
