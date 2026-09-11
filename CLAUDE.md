@@ -19,6 +19,7 @@ src/engine/   pure functional core, shaped as an ACTION LOG.
               ladder.js  — the gym's framework: disconnected shapes,
                            connections, finishes; rungOf(from, to)
               templates.js — the coach's starter sets, lines on the ladder
+              sheet.js   — the coach's sheets: rows <-> catalogue (sets + ranks)
 src/app/      the shell: clock (nowISO) + disk (log → localStorage)
 src/ui/       React + one stylesheet (theme.css). No logic worth testing
               lives here — if a component needs a rule, the rule moves to

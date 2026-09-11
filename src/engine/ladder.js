@@ -115,11 +115,21 @@ const DIS = new Set(DISCONNECTED.map((d) => norm(d.label)));
 const CON = new Set(CONNECTIONS.map(norm));
 const FIN = new Set(FINISHES.map((f) => norm(f.label)));
 
-const RANK = new Map([
-  ...CONTROL.weak.map((c) => [norm(c), 1]),
-  ...CONTROL.strong.map((c) => [norm(c), 2]),
-  ...CONTROL.dominant.map((c) => [norm(c), 3]),
-]);
+// The shipped table is the default; the coach's synced table (same shape)
+// replaces it wherever a caller passes one. Maps are cached per table.
+const RANKS = new WeakMap();
+function rankOf(control) {
+  let m = RANKS.get(control);
+  if (!m) {
+    m = new Map([
+      ...(control.weak ?? []).map((c) => [norm(c), 1]),
+      ...(control.strong ?? []).map((c) => [norm(c), 2]),
+      ...(control.dominant ?? []).map((c) => [norm(c), 3]),
+    ]);
+    RANKS.set(control, m);
+  }
+  return m;
+}
 
 export const isDisconnected = (s) => DIS.has(norm(s));
 export const isConnection = (s) => CON.has(norm(s));
@@ -145,18 +155,18 @@ export function rungOf(from, move) {
 }
 
 // 0 disconnected, 1 weak, 2 strong, 3 dominant, 4 a finish; null unknown.
-export function controlOf(name) {
+export function controlOf(name, control = CONTROL) {
   if (isDisconnected(name)) return 0;
   if (isFinish(name)) return 4;
-  return RANK.get(norm(name)) ?? null;
+  return rankOf(control ?? CONTROL).get(norm(name)) ?? null;
 }
 
 // The step read as control: up, level, down, a phase change, a hold — or
 // other when an end is unknown.
-export function climbOf(from, move) {
+export function climbOf(from, move, control = CONTROL) {
   const { to } = splitMove(move);
   if (isHold(to) || (from && norm(to) === norm(from))) return "hold";
-  const a = controlOf(from), b = controlOf(to);
+  const a = controlOf(from, control), b = controlOf(to, control);
   if (a === null || b === null) return "other";
   if (b === 4) return "phase";
   return b > a ? "up" : b < a ? "down" : "level";
@@ -191,8 +201,9 @@ export function toOptions(from) {
 // the plain one. Edges come in climb order (hold, up, level, down, phase),
 // then by first appearance; froms come disconnected shapes first (those with an edge, in
 // the ladder's order), then connections by first appearance — so the
-// coach's sets are the one place the gym's map lives.
-export function ladderGraph(templates) {
+// coach's sets are the one place the gym's map lives. Climbs are read
+// against the control table given (the coach's synced ranks) or the shipped one.
+export function ladderGraph(templates, control = CONTROL) {
   const edges = new Map();
   const seen = new Set();
   for (const t of templates) {
@@ -208,7 +219,7 @@ export function ladderGraph(templates) {
         label,
         move: p.move,
         rung: rungOf(p.position, p.move),
-        climb: climbOf(p.position, p.move),
+        climb: climbOf(p.position, p.move, control),
         target: p.target,
       });
     }

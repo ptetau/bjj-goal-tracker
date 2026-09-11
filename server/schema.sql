@@ -59,3 +59,12 @@ CREATE TABLE IF NOT EXISTS templates (
   position   int  NOT NULL DEFAULT 0,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- The coach's connection ranks (weak / strong / dominant), synced from the
+-- ranks sheet beside the sets. Empty means "use the shipped table".
+CREATE TABLE IF NOT EXISTS ladder_ranks (
+  connection text PRIMARY KEY,
+  rank       text NOT NULL,
+  position   int  NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);

@@ -8,6 +8,8 @@ import { readFileSync, existsSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { makeReferee } from "./referee.js";
 import { makeTemplateStore } from "./templates.js";
+import { sheetUrls, syncFromSheets } from "./sheet-sync.js";
+import { templateErrorMessage, templateErrorStatus } from "../api/templates.js";
 import { makeAuth } from "./auth.js";
 import { makePgDb, pickDatabaseUrl } from "./db-pg.js";
 
@@ -103,19 +105,30 @@ createServer(async (req, res) => {
   }
 
   if (req.url === "/api/templates") {
+    const urls = sheetUrls(process.env);
+    const catalogue = async () => ({
+      templates: await templates.list(),
+      control: await templates.control(),
+      sheet: Boolean(urls.graph && urls.ranks),
+    });
     try {
-      if (req.method === "GET") return send(200, { templates: await templates.list() });
+      if (req.method === "GET") return send(200, await catalogue());
+      const secret = req.headers["x-template-secret"];
       if (req.method === "PUT") {
         const body = JSON.parse((await readBody(req)) || "{}");
-        await templates.replace(req.headers["x-template-secret"], body.templates);
-        return send(200, { templates: await templates.list() });
+        await templates.replace(secret, body.templates);
+        return send(200, await catalogue());
       }
-      return send(405, { error: "GET or PUT" });
+      if (req.method === "POST") {
+        const body = JSON.parse((await readBody(req)) || "{}");
+        if (body.op !== "sync") return send(400, { error: "unknown op" });
+        const synced = await syncFromSheets({ store: templates, secret, urls });
+        return send(200, { synced, ...(await catalogue()) });
+      }
+      return send(405, { error: "GET, PUT, or POST {op:'sync'}" });
     } catch (err) {
-      const msg = String(err.message || err);
-      if (/auth/.test(msg)) return send(401, { error: "auth failed" });
-      if (/disabled/.test(msg)) return send(403, { error: msg });
-      return send(400, { error: msg });
+      if (/JSON/.test(String(err.message || err))) return send(400, { error: String(err.message) });
+      return send(templateErrorStatus(err), { error: templateErrorMessage(err) });
     }
   }
 

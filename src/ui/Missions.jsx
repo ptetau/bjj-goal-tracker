@@ -17,25 +17,66 @@ import React, { useEffect, useMemo, useState } from "react";
 import { LIST_TYPES, room, targetProgress } from "../engine/actions.js";
 import { itemTitle, parseLines, toLine } from "../engine/parse.js";
 import { DEFAULT_TEMPLATES } from "../engine/templates.js";
-import { CLIMBS, CONNECTIONS, DISCONNECTED, RUNGS, isDisconnected, ladderGraph, rungOf, toOptions } from "../engine/ladder.js";
+import { CLIMBS, CONNECTIONS, CONTROL, DISCONNECTED, RUNGS, isDisconnected, ladderGraph, rungOf, toOptions } from "../engine/ladder.js";
 
-// One fetch serves the rail: the gym's server when reachable
-// (coach-owned), the shipped defaults offline.
-function useTemplates() {
-  const [templates, setTemplates] = useState(DEFAULT_TEMPLATES);
+// One fetch serves the sheet: the gym's catalogue (the coach's sets and
+// ranks) when the server is reachable, the shipped defaults offline.
+// `sheet` says the server has the coach's sheets to sync from.
+const SHIPPED = { templates: DEFAULT_TEMPLATES, control: CONTROL, sheet: false };
+function useCatalogue() {
+  const [catalogue, setCatalogue] = useState(SHIPPED);
+  const take = (body) => {
+    if (!Array.isArray(body?.templates) || !body.templates.length) return;
+    setCatalogue({ templates: body.templates, control: body.control ?? CONTROL, sheet: Boolean(body.sheet) });
+  };
   useEffect(() => {
     let alive = true;
     fetch("/api/templates")
       .then((r) => (r.ok ? r.json() : null))
-      .then((body) => {
-        if (alive && Array.isArray(body?.templates) && body.templates.length) setTemplates(body.templates);
-      })
+      .then((body) => alive && take(body))
       .catch(() => {});
     return () => {
       alive = false;
     };
   }, []);
-  return templates;
+  // The coach's key: pull the sheets into the server, then into this screen.
+  const sync = async (secret) => {
+    const res = await fetch("/api/templates", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-template-secret": secret },
+      body: JSON.stringify({ op: "sync" }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `sync failed (${res.status})`);
+    take(body);
+    return body.synced;
+  };
+  return { ...catalogue, sync };
+}
+
+// The coach's key on the Missions tab, shown only when the server has
+// sheets to read. Asks for the admin secret, then says what came through.
+function SyncFromSheets({ sync }) {
+  const [note, setNote] = useState(null);
+  const run = async () => {
+    const secret = window.prompt("Admin secret, to pull the coach's sheets into the app");
+    if (!secret) return;
+    setNote("syncing…");
+    try {
+      const s = await sync(secret);
+      setNote(`Synced ${s.sets} sets (${s.lines} lines) and ${s.ranks} ranks from the sheets.`);
+    } catch (err) {
+      setNote(`Not synced: ${err.message}`);
+    }
+  };
+  return (
+    <p className="hint sync-sheets">
+      <button className="ghost tiny" onClick={run}>
+        Sync from sheets
+      </button>
+      {note && <span> {note}</span>}
+    </p>
+  );
 }
 
 const KIND = {
@@ -94,9 +135,9 @@ function groupEdges(edges) {
 // (the item retires, and a third tap restores it — history is kept). The
 // text box reaches the rest of the ladder. The first line of an empty slot
 // creates its list.
-function AddSheet({ type, state, dispatch, list, templates, onClose }) {
+function AddSheet({ type, state, dispatch, list, templates, control, onClose }) {
   const kind = KIND[type];
-  const graph = useMemo(() => ladderGraph(templates), [templates]);
+  const graph = useMemo(() => ladderGraph(templates, control), [templates, control]);
   const [from, setFrom] = useState(null);
   const [target, setTarget] = useState(kind.defaultTarget);
   const [custom, setCustom] = useState("");
@@ -424,7 +465,7 @@ function List({ list, state, dispatch }) {
 
 // One slot per kind: the list (if any), one Add button, and the sheet it
 // opens. An empty slot also offers the coach's sets, trimmed to the cap.
-function Slot({ type, state, dispatch, templates }) {
+function Slot({ type, state, dispatch, templates, control }) {
   const kind = KIND[type];
   const lists = state.lists.filter((l) => l.type === type && !l.archivedAt);
   const list = lists[0] || null;
@@ -469,7 +510,7 @@ function Slot({ type, state, dispatch, templates }) {
         </p>
       )}
       {adding && (
-        <AddSheet type={type} state={state} dispatch={dispatch} list={list} templates={templates} onClose={() => setAdding(false)} />
+        <AddSheet type={type} state={state} dispatch={dispatch} list={list} templates={templates} control={control} onClose={() => setAdding(false)} />
       )}
     </div>
   );
@@ -477,7 +518,7 @@ function Slot({ type, state, dispatch, templates }) {
 
 export default function Missions({ state, dispatch }) {
   const archived = state.lists.filter((l) => l.archivedAt);
-  const templates = useTemplates();
+  const { templates, control, sheet, sync } = useCatalogue();
   const [showArchived, setShowArchived] = useState(false);
 
   return (
@@ -490,7 +531,7 @@ export default function Missions({ state, dispatch }) {
         ))}
       </div>
       {LIST_TYPES.map((type) => (
-        <Slot key={type} type={type} state={state} dispatch={dispatch} templates={templates} />
+        <Slot key={type} type={type} state={state} dispatch={dispatch} templates={templates} control={control} />
       ))}
       {archived.length > 0 && (
         <>
@@ -517,6 +558,7 @@ export default function Missions({ state, dispatch }) {
             ))}
         </>
       )}
+      {sheet && <SyncFromSheets sync={sync} />}
     </section>
   );
 }

@@ -173,3 +173,16 @@ describe("named steps: 'from => to => label'", () => {
     for (const [from, es] of g.edges) for (const e of es) expect(["up", "level", "down", "phase", "hold"], `${from} => ${e.to}`).toContain(e.climb);
   });
 });
+
+describe("ranks the coach can change", () => {
+  it("climbOf and ladderGraph take a control table in place of the shipped one", async () => {
+    const { climbOf, ladderGraph, controlOf } = await import("../src/engine/ladder.js");
+    const flipped = { weak: ["Underhook"], strong: ["Knee shield"], dominant: [] };
+    expect(climbOf("Knee shield", "Underhook")).toBe("level"); // shipped: both weak
+    expect(climbOf("Knee shield", "Underhook", flipped)).toBe("down");
+    expect(controlOf("Front headlock", flipped)).toBe(null); // not ranked in the coach's table
+    const sets = [{ key: "hg", name: "Half guard", type: "tokui", lines: "Knee shield => Underhook" }];
+    expect(ladderGraph(sets).edges.get("Knee shield")[0].climb).toBe("level");
+    expect(ladderGraph(sets, flipped).edges.get("Knee shield")[0].climb).toBe("down");
+  });
+});

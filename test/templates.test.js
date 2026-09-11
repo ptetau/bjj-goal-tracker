@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { makePgliteDb } from "./pglite-db.js";
 import { DEFAULT_TEMPLATES } from "../src/engine/templates.js";
-import { rungOf } from "../src/engine/ladder.js";
+import { CONTROL, rungOf } from "../src/engine/ladder.js";
 import { makeTemplateStore } from "../server/templates.js";
 import { parseLines } from "../src/engine/parse.js";
 import { apply, initState } from "../src/engine/actions.js";
@@ -111,5 +111,65 @@ describe("the template store", () => {
     const locked = makeTemplateStore(await makePgliteDb(new PGlite()), undefined);
     await expect(locked.replace("anything", [])).rejects.toThrow(/disabled/);
     expect(await locked.list()).toHaveLength(DEFAULT_TEMPLATES.length); // reads still work
+  });
+});
+
+describe("the catalogue: sets plus ranks, synced from the coach's sheets", () => {
+  const graphCsv = [
+    "Set,Kind,From,To,Name,Target,Rung,Control change",
+    "Front headlock,tokui,Both standing,Front headlock,,,make,up",
+    "Front headlock,tokui,Front headlock,Darce,,25,profit,phase",
+    "Front headlock,tokui,Front headlock,Takedown,Snap down,25,profit,phase",
+    "Front headlock,tokui,Front headlock,Hold,,,,",
+    "Leg entanglements,kaizen,I'm down,Inside entanglement,,50,,",
+    "Leg entanglements,kaizen,Inside entanglement,Hold,,50,,",
+    "Leg entanglements,kaizen,Inside entanglement,Heel hook,,50,,",
+    "Leg entanglements,kaizen,Inside entanglement,Outside entanglement,,50,,",
+  ].join("\n");
+  const ranksCsv = "Connection,Rank (weak / strong / dominant)\nFront headlock,dominant\nInside entanglement,weak\nOutside entanglement,strong";
+  const urls = { graph: "https://sheet.test/graph.csv", ranks: "https://sheet.test/ranks.csv" };
+  const fetchText = async (url) => {
+    if (url === urls.graph) return graphCsv;
+    if (url === urls.ranks) return ranksCsv;
+    throw new Error(`unexpected fetch ${url}`);
+  };
+
+  let store;
+  beforeAll(async () => {
+    store = makeTemplateStore(await makePgliteDb(new PGlite()), "coach-secret");
+  });
+
+  it("serves the shipped ranks until the coach syncs", async () => {
+    expect(await store.control()).toEqual(CONTROL);
+  });
+
+  it("syncs both sheets into the catalogue with the right secret", async () => {
+    const { syncFromSheets } = await import("../server/sheet-sync.js");
+    const summary = await syncFromSheets({ store, secret: "coach-secret", urls, fetchText });
+    expect(summary).toEqual({ sets: 2, lines: 8, ranks: 3 });
+    const templates = await store.list();
+    expect(templates.map((t) => [t.key, t.type])).toEqual([["front-headlock", "tokui"], ["leg-entanglements", "growth"]]);
+    expect(templates[0].lines).toBe("Both standing => Front headlock\nFront headlock => Darce x25\nFront headlock => Takedown => Snap down x25\nFront headlock => Hold");
+    expect(await store.control()).toEqual({ weak: ["Inside entanglement"], strong: ["Outside entanglement"], dominant: ["Front headlock"] });
+  });
+
+  it("does not fetch on a wrong secret, and keeps the catalogue when a sheet is unreadable", async () => {
+    const { syncFromSheets } = await import("../server/sheet-sync.js");
+    let fetched = 0;
+    const counting = async (url) => {
+      fetched++;
+      return fetchText(url);
+    };
+    await expect(syncFromSheets({ store, secret: "wrong", urls, fetchText: counting })).rejects.toThrow(/auth/);
+    expect(fetched).toBe(0);
+    const broken = async (url) => (url === urls.ranks ? "Connection,Rank\nFront headlock,huge" : fetchText(url));
+    await expect(syncFromSheets({ store, secret: "coach-secret", urls, fetchText: broken })).rejects.toThrow(/ranks row 2/);
+    expect((await store.list()).map((t) => t.key)).toEqual(["front-headlock", "leg-entanglements"]);
+    expect(await store.control()).toEqual({ weak: ["Inside entanglement"], strong: ["Outside entanglement"], dominant: ["Front headlock"] });
+  });
+
+  it("refuses to sync when no sheet is configured", async () => {
+    const { syncFromSheets } = await import("../server/sheet-sync.js");
+    await expect(syncFromSheets({ store, secret: "coach-secret", urls: { graph: "", ranks: "" }, fetchText })).rejects.toThrow(/not configured/);
   });
 });

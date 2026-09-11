@@ -498,6 +498,8 @@ section > .hint { color: var(--chalk-dim); }
 .r-other { --f: var(--r-other); }
 
 .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 0.78rem; color: var(--chalk-dim); margin: 0 0 14px; }
+.sync-sheets { margin-top: 18px; }
+.sync-sheets span { margin-left: 8px; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--f, var(--r-other)); vertical-align: -1px; }
 
 .taps-label {
