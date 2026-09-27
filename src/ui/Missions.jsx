@@ -21,62 +21,23 @@ import { CLIMBS, CONNECTIONS, CONTROL, DISCONNECTED, RUNGS, isDisconnected, ladd
 
 // One fetch serves the sheet: the gym's catalogue (the coach's sets and
 // ranks) when the server is reachable, the shipped defaults offline.
-// `sheet` says the server has the coach's sheets to sync from.
-const SHIPPED = { templates: DEFAULT_TEMPLATES, control: CONTROL, sheet: false };
+const SHIPPED = { templates: DEFAULT_TEMPLATES, control: CONTROL };
 function useCatalogue() {
   const [catalogue, setCatalogue] = useState(SHIPPED);
-  const take = (body) => {
-    if (!Array.isArray(body?.templates) || !body.templates.length) return;
-    setCatalogue({ templates: body.templates, control: body.control ?? CONTROL, sheet: Boolean(body.sheet) });
-  };
   useEffect(() => {
     let alive = true;
     fetch("/api/templates")
       .then((r) => (r.ok ? r.json() : null))
-      .then((body) => alive && take(body))
+      .then((body) => {
+        if (alive && Array.isArray(body?.templates) && body.templates.length)
+          setCatalogue({ templates: body.templates, control: body.control ?? CONTROL });
+      })
       .catch(() => {});
     return () => {
       alive = false;
     };
   }, []);
-  // The coach's key: pull the sheets into the server, then into this screen.
-  const sync = async (secret) => {
-    const res = await fetch("/api/templates", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-template-secret": secret },
-      body: JSON.stringify({ op: "sync" }),
-    });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error || `sync failed (${res.status})`);
-    take(body);
-    return body.synced;
-  };
-  return { ...catalogue, sync };
-}
-
-// The coach's key on the Missions tab, shown only when the server has
-// sheets to read. Asks for the admin secret, then says what came through.
-function SyncFromSheets({ sync }) {
-  const [note, setNote] = useState(null);
-  const run = async () => {
-    const secret = window.prompt("Admin secret, to pull the coach's sheets into the app");
-    if (!secret) return;
-    setNote("syncing…");
-    try {
-      const s = await sync(secret);
-      setNote(`Synced ${s.sets} sets (${s.lines} lines) and ${s.ranks} ranks from the sheets.`);
-    } catch (err) {
-      setNote(`Not synced: ${err.message}`);
-    }
-  };
-  return (
-    <p className="hint sync-sheets">
-      <button className="ghost tiny" onClick={run}>
-        Sync from sheets
-      </button>
-      {note && <span> {note}</span>}
-    </p>
-  );
+  return catalogue;
 }
 
 const KIND = {
@@ -519,7 +480,7 @@ function Slot({ type, state, dispatch, templates, control }) {
 
 export default function Missions({ state, dispatch }) {
   const archived = state.lists.filter((l) => l.archivedAt);
-  const { templates, control, sheet, sync } = useCatalogue();
+  const { templates, control } = useCatalogue();
   const [showArchived, setShowArchived] = useState(false);
 
   return (
@@ -559,7 +520,6 @@ export default function Missions({ state, dispatch }) {
             ))}
         </>
       )}
-      {sheet && <SyncFromSheets sync={sync} />}
     </section>
   );
 }

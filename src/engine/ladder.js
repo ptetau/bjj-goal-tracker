@@ -17,6 +17,7 @@
 // falls back to.
 
 import { parseLines } from "./parse.js";
+import catalogue from "./catalogue.json" with { type: "json" };
 
 export const DISCONNECTED = [
   { label: "Both standing", hint: "on the feet, no tie yet" },
@@ -103,12 +104,9 @@ export const HOLD = "Hold";
 // or down. Weak ties you get to from neutral; strong ties decide the
 // exchange (the gym scores a takedown from a strong tie double); dominant
 // ties are a finish waiting to happen. Disconnected sits below all of them;
-// a finish is not a rank but a phase change. One table, easy to argue with.
-export const CONTROL = {
-  weak: ["Collar tie", "Two-on-one", "Underhook", "Collar and sleeve", "Lasso", "DLR hook", "RDLR hook", "Butterfly hooks", "K guard", "Knee shield", "SLX", "50/50", "Cross face"],
-  strong: ["Front headlock", "Body lock", "Single leg", "Double underhooks", "Closed guard", "Saddle", "Outside ashi", "Triangle hub", "Omoplata hub"],
-  dominant: ["Rear body lock", "Seatbelt", "Gift wrap", "Crowbar", "Shoulder lever"],
-};
+// a finish is not a rank but a phase change. One table, easy to argue
+// with — it lives in catalogue.json beside the sets.
+export const CONTROL = catalogue.control;
 
 export const RUNGS = [
   { key: "make", label: "Make", blurb: "from disconnected to a connection" },
