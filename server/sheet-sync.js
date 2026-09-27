@@ -1,3 +1,4 @@
+// PARKED: not wired to any route while catalogue.json is the admin file.
 // Sync from the coach's sheets: fetch both CSVs, read them into a catalogue
 // through the engine, replace sets and ranks in one transaction. The
 // secret is checked before anything is fetched, so a wrong key costs no

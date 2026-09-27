@@ -1,15 +1,16 @@
-// Training mode. While a session is rolling the whole screen is a drum
-// machine: one fat pad per live item, two banks you swipe between (A for
+// Training mode — the Roll tab itself. The whole screen is a drum machine:
+// one fat pad per live item, split on the diagonal (top-left HIT, bottom-
+// right TRY, each with its own count), two banks you swipe between (A for
 // tokui, B for kaizen — the growth list; an empty bank says how to fill
-// it), a display that echoes the last tap, and
-// one UNDO that takes back whatever the last tap was. A pad tap records a
-// hit; latch the TRY key and pad taps record attempts until you unlatch it
-// (the pads warm up and count attempts while it is latched).
-// Built for wrecked hands between rolls: nothing here needs precision, and
-// every mistake is one UNDO away.
+// it), a display that shows the day and echoes the last tap, and one UNDO
+// that takes back whatever the last tap was. Nothing is rolling until the
+// first tap, which starts the session; the calendar key arms an earlier
+// day for a session logged after the fact, and the deck changes colour so
+// you can't mistake it for today. Built for wrecked hands between rolls:
+// nothing here needs precision, and every mistake is one UNDO away.
 
 import React, { useRef, useState } from "react";
-import { liveBanks, tallies } from "../engine/actions.js";
+import { liveBanks, openSession, tallies } from "../engine/actions.js";
 import { itemTitle } from "../engine/parse.js";
 import { buzz } from "../app/haptics.js";
 
@@ -18,28 +19,43 @@ const BANK_EMPTY = {
   tokui: "No tokui waza yet. Your special techniques — the few things you hit every session.",
   growth: "Nothing in kaizen yet. Up to three things you're exploring.",
 };
+const dayLabel = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
-export default function Pads({ state, live, dispatch, onEnd, onExit, syncDot, error, clearError }) {
-  const [mode, setMode] = useState("hit"); // what a pad tap records
+export default function Pads({ state, live, today, dispatch, onEnd, onExit, syncDot, error, clearError }) {
   const [lit, setLit] = useState(null); // { itemId, kind, tick } retriggers the flash
   const [bank, setBank] = useState(0);
+  const [pastDate, setPastDate] = useState(null); // the day the next session is for, when not today
   const scroller = useRef(null);
 
   const banks = liveBanks(state);
-  const counts = tallies(live);
-  const lastTap = live.taps[live.taps.length - 1] || null;
+  const taps = live ? live.taps : [];
+  const counts = live ? tallies(live) : new Map();
+  const lastTap = taps[taps.length - 1] || null;
   const lastItem = lastTap ? state.lists.flatMap((l) => l.items).find((it) => it.id === lastTap.itemId) : null;
   const lastLabel = lastTap && lastItem ? `${lastTap.kind.toUpperCase()} · ${itemTitle(lastItem)}` : null;
+  const day = live ? live.date : pastDate || today;
+  const past = day !== today;
 
-  const tap = (itemId) => {
-    if (dispatch("tap", { sessionId: live.id, itemId, kind: mode })) {
-      buzz(mode === "hit" ? [16, 30, 16] : 16);
-      setLit({ itemId, kind: mode, tick: Date.now() });
+  // The first tap starts the session — on the armed day if there is one.
+  const tap = (itemId, kind) => {
+    let s = state;
+    if (!live) {
+      s = dispatch("startSession", pastDate ? { date: pastDate } : {});
+      if (!s) return;
+    }
+    if (dispatch("tap", { sessionId: openSession(s).id, itemId, kind })) {
+      buzz(kind === "hit" ? [16, 30, 16] : 16);
+      setLit({ itemId, kind, tick: Date.now() });
     }
   };
 
   const undo = () => {
-    if (dispatch("undoTap", { sessionId: live.id })) buzz([10, 20, 10]);
+    if (live && dispatch("undoTap", { sessionId: live.id })) buzz([10, 20, 10]);
+  };
+
+  const pickDay = (e) => {
+    const d = e.target.value;
+    setPastDate(d && d < today ? d : null);
   };
 
   const goBank = (i) => {
@@ -53,23 +69,29 @@ export default function Pads({ state, live, dispatch, onEnd, onExit, syncDot, er
   };
 
   return (
-    <section className={`deck mode-${mode}`} aria-label="Training mode">
+    <section className={`deck ${past ? "past" : ""}`} aria-label="Training mode">
       <header className="deck-top">
         <div className="deck-brand">
           TOKUI <span>得意</span>
           <i className={`led led-${syncDot}`} aria-label={`sync ${syncDot}`} />
         </div>
-        <button className="key key-menu" onClick={onExit}>
-          MENU
-        </button>
+        <div className="deck-keys">
+          <label className={`key key-cal ${past ? "on" : ""} ${live ? "off" : ""}`} aria-label="Session day" title={live ? "The day is set while a session is rolling" : "Log a session for an earlier day"}>
+            <span aria-hidden="true">📅</span>
+            <input type="date" value={pastDate || today} max={today} disabled={!!live} onChange={pickDay} />
+          </label>
+          <button className="key key-menu" onClick={onExit}>
+            MENU
+          </button>
+        </div>
       </header>
 
       <div className="lcd" aria-live="polite">
         <div className="lcd-row">
-          <span>MODE {mode.toUpperCase()}</span>
-          <span>TAPS {String(live.taps.length).padStart(3, "0")}</span>
+          <span className="lcd-day">{past ? `PAST · ${dayLabel(day)}` : `TODAY · ${dayLabel(day)}`}</span>
+          <span>TAPS {String(taps.length).padStart(3, "0")}</span>
         </div>
-        <div className="lcd-row lcd-last">{lastLabel ? `LAST · ${lastLabel}` : "READY"}</div>
+        <div className="lcd-row lcd-last">{lastLabel ? `LAST · ${lastLabel}` : live ? "ROLLING" : past ? "TAP A PAD TO LOG THIS DAY" : "TAP A PAD TO START"}</div>
       </div>
 
       {error && (
@@ -105,33 +127,32 @@ export default function Pads({ state, live, dispatch, onEnd, onExit, syncDot, er
                 <button className="key" onClick={onExit}>
                   ADD IN MISSIONS
                 </button>
-                <small>The session keeps rolling while you do.</small>
+                {live && <small>The session keeps rolling while you do.</small>}
               </div>
             )}
             {b.items.map((item) => {
               const c = counts.get(item.id) || { hits: 0, tries: 0 };
-              const big = mode === "hit" ? c.hits : c.tries; // the count this mode is adding to
               const flashing = lit && lit.itemId === item.id;
               const isLast = lastTap && lastTap.itemId === item.id;
               return (
-                <button
+                <div
                   key={flashing ? `${item.id}:${lit.tick}` : item.id}
                   className={`pad ${flashing ? `lit lit-${lit.kind}` : ""} ${isLast ? `last last-${lastTap.kind}` : ""}`}
-                  onClick={() => tap(item.id)}
-                  aria-label={`${mode === "hit" ? "Hit" : "Attempted"} ${itemTitle(item)}`}
                 >
                   <i className="led" aria-hidden="true" />
-                  <b className={`pad-count ${big === 0 ? "zero" : ""}`} aria-hidden="true">
-                    {big}
-                  </b>
+                  <button className="zone zone-hit" onClick={() => tap(item.id, "hit")} aria-label={`Hit ${itemTitle(item)}`}>
+                    <small>HIT</small>
+                    <b className={`pad-count ${c.hits === 0 ? "zero" : ""}`}>{c.hits}</b>
+                  </button>
+                  <button className="zone zone-try" onClick={() => tap(item.id, "try")} aria-label={`Attempted ${itemTitle(item)}`}>
+                    <small>TRY</small>
+                    <b className={`pad-count ${c.tries === 0 ? "zero" : ""}`}>{c.tries}</b>
+                  </button>
                   <span className="pad-name">
                     {item.position && <small>{item.position}</small>}
                     {item.move}
                   </span>
-                  <span className="pad-tally">
-                    {c.hits} hit · {c.tries} try
-                  </span>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -139,19 +160,11 @@ export default function Pads({ state, live, dispatch, onEnd, onExit, syncDot, er
       </div>
 
       <footer className="transport">
-        <button
-          className={`key key-try ${mode === "try" ? "on" : ""}`}
-          aria-pressed={mode === "try"}
-          onClick={() => setMode(mode === "hit" ? "try" : "hit")}
-        >
-          <i className="led" aria-hidden="true" />
-          TRY
-        </button>
-        <button className="key key-undo" disabled={live.taps.length === 0} onClick={undo}>
+        <button className="key key-undo" disabled={taps.length === 0} onClick={undo}>
           UNDO
           <small>{lastLabel || "nothing yet"}</small>
         </button>
-        <button className="key key-end" onClick={onEnd}>
+        <button className="key key-end" disabled={!live} onClick={onEnd}>
           END
         </button>
       </footer>

@@ -1,5 +1,5 @@
 // Starter mission sets: the shipped defaults must be valid app content
-// (every line parses, sane sizes, growth items carrying the default x50),
+// (every line parses, sane sizes, every set a kaizen set carrying x50),
 // and the server-side store must seed them, serve them, and let only the
 // holder of the admin secret replace them — coach-owned by design, before
 // accounts exist.
@@ -62,19 +62,12 @@ describe("DEFAULT_TEMPLATES content", () => {
       for (const item of parseLines(t.lines)) expect(rungOf(item.position, item.move), `${t.key}: ${item.position} => ${item.move}`).not.toBe("other");
   });
 
-  it("growth templates default every item to a high x50 target", () => {
-    for (const t of DEFAULT_TEMPLATES.filter((x) => x.type === "growth"))
-      for (const item of parseLines(t.lines)) expect(item.target).toBe(50);
+  it("every set is a kaizen set: tokui waza is yours to add, there are no presets for it", () => {
+    for (const t of DEFAULT_TEMPLATES) expect(t.type, t.key).toBe("growth");
   });
 
-  it("tokui templates put targets on finishes, not on positional work", () => {
-    // Concretely: at least one targeted item per tokui set, never all of them.
-    for (const t of DEFAULT_TEMPLATES.filter((x) => x.type === "tokui")) {
-      const items = parseLines(t.lines);
-      const targeted = items.filter((i) => i.target !== null);
-      expect(targeted.length).toBeGreaterThanOrEqual(1);
-      expect(targeted.length).toBeLessThan(items.length);
-    }
+  it("every set line carries the high x50 target: fifty of the new thing is the point", () => {
+    for (const t of DEFAULT_TEMPLATES) for (const item of parseLines(t.lines)) expect(item.target, `${t.key}: ${item.position} => ${item.move}`).toBe(50);
   });
 });
 
@@ -121,12 +114,12 @@ describe("the catalogue: sets plus ranks, synced from the coach's sheets", () =>
     "Front headlock,tokui,Front headlock,Darce,,25,profit,phase",
     "Front headlock,tokui,Front headlock,Takedown,Snap down,25,profit,phase",
     "Front headlock,tokui,Front headlock,Hold,,,,",
-    "Leg entanglements,kaizen,I'm down,Inside entanglement,,50,,",
-    "Leg entanglements,kaizen,Inside entanglement,Hold,,50,,",
-    "Leg entanglements,kaizen,Inside entanglement,Heel hook,,50,,",
-    "Leg entanglements,kaizen,Inside entanglement,Outside entanglement,,50,,",
+    "Leg entanglements,kaizen,I'm down,SLX,,50,,",
+    "Leg entanglements,kaizen,SLX,Hold,,50,,",
+    "Leg entanglements,kaizen,SLX,Heel hook,,50,,",
+    "Leg entanglements,kaizen,SLX,Saddle,,50,,",
   ].join("\n");
-  const ranksCsv = "Connection,Rank (weak / strong / dominant)\nFront headlock,dominant\nInside entanglement,weak\nOutside entanglement,strong";
+  const ranksCsv = "Connection,Rank (weak / strong / dominant)\nFront headlock,dominant\nSLX,weak\nSaddle,strong";
   const urls = { graph: "https://sheet.test/graph.csv", ranks: "https://sheet.test/ranks.csv" };
   const fetchText = async (url) => {
     if (url === urls.graph) return graphCsv;
@@ -150,7 +143,7 @@ describe("the catalogue: sets plus ranks, synced from the coach's sheets", () =>
     const templates = await store.list();
     expect(templates.map((t) => [t.key, t.type])).toEqual([["front-headlock", "tokui"], ["leg-entanglements", "growth"]]);
     expect(templates[0].lines).toBe("Both standing => Front headlock\nFront headlock => Darce x25\nFront headlock => Takedown => Snap down x25\nFront headlock => Hold");
-    expect(await store.control()).toEqual({ weak: ["Inside entanglement"], strong: ["Outside entanglement"], dominant: ["Front headlock"] });
+    expect(await store.control()).toEqual({ weak: ["SLX"], strong: ["Saddle"], dominant: ["Front headlock"] });
   });
 
   it("does not fetch on a wrong secret, and keeps the catalogue when a sheet is unreadable", async () => {
@@ -165,7 +158,7 @@ describe("the catalogue: sets plus ranks, synced from the coach's sheets", () =>
     const broken = async (url) => (url === urls.ranks ? "Connection,Rank\nFront headlock,huge" : fetchText(url));
     await expect(syncFromSheets({ store, secret: "coach-secret", urls, fetchText: broken })).rejects.toThrow(/ranks row 2/);
     expect((await store.list()).map((t) => t.key)).toEqual(["front-headlock", "leg-entanglements"]);
-    expect(await store.control()).toEqual({ weak: ["Inside entanglement"], strong: ["Outside entanglement"], dominant: ["Front headlock"] });
+    expect(await store.control()).toEqual({ weak: ["SLX"], strong: ["Saddle"], dominant: ["Front headlock"] });
   });
 
   it("refuses to sync when no sheet is configured", async () => {

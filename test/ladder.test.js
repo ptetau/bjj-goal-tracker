@@ -108,7 +108,7 @@ describe("ladderGraph(templates): the graph we built, as the sheet offers it", (
     const g = ladderGraph(DEFAULT_TEMPLATES);
     const takedowns = g.edges.get("Front headlock").filter((e) => e.to === "Takedown");
     expect(takedowns).toHaveLength(1); // in "fundamentals", "front-headlock" and "standing"
-    expect(takedowns[0].target).toBe(25);
+    expect(takedowns[0].target).toBe(50);
     for (const [from, edges] of g.edges) for (const e of edges) expect(e.rung).toBe(rungOf(from, e.to));
   });
 
@@ -184,5 +184,20 @@ describe("ranks the coach can change", () => {
     const sets = [{ key: "hg", name: "Half guard", type: "tokui", lines: "Knee shield => Underhook" }];
     expect(ladderGraph(sets).edges.get("Knee shield")[0].climb).toBe("level");
     expect(ladderGraph(sets, flipped).edges.get("Knee shield")[0].climb).toBe("down");
+  });
+});
+
+describe("leg entanglements: where I face and which hip their leg crosses", () => {
+  it("is a two-by-two: four named cells, every one a connection, the old names gone", async () => {
+    const { ENTANGLEMENTS, CONNECTIONS, isConnection } = await import("../src/engine/ladder.js");
+    expect(ENTANGLEMENTS.map((e) => [e.label, e.facing, e.hip])).toEqual([
+      ["Saddle", "inside", "inside"],
+      ["SLX", "inside", "outside"],
+      ["50/50", "outside", "inside"],
+      ["Outside ashi", "outside", "outside"],
+    ]);
+    for (const e of ENTANGLEMENTS) expect(isConnection(e.label), e.label).toBe(true);
+    for (const old of ["Inside entanglement", "Outside entanglement", "Open entanglement", "Closed entanglement"])
+      expect(CONNECTIONS).not.toContain(old);
   });
 });

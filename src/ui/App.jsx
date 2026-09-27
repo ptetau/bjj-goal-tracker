@@ -3,7 +3,6 @@ import { apply, openSession } from "../engine/actions.js";
 import { foldDoc, loadDoc, newActionId, nowISO, saveDoc } from "../app/store.js";
 import { redeemLogin, syncDoc } from "../app/sync.js";
 import Missions from "./Missions.jsx";
-import Roll from "./Roll.jsx";
 import Pads from "./Pads.jsx";
 import Grid from "./Grid.jsx";
 import Calendar from "./Calendar.jsx";
@@ -31,12 +30,20 @@ export default function App() {
 
   const docRef = useRef(doc);
   docRef.current = doc;
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const inFlight = useRef(false);
 
+  // The refs move with the commit, not the render, so two dispatches in one
+  // handler (start a session, then land its first tap) chain correctly.
   const commit = (nextDoc, nextState) => {
+    docRef.current = nextDoc;
     setDoc(nextDoc);
     saveDoc(nextDoc);
-    if (nextState) setState(nextState);
+    if (nextState) {
+      stateRef.current = nextState;
+      setState(nextState);
+    }
   };
 
   // Dispatch stamps the action (device-unique id + local time), folds it
@@ -44,7 +51,7 @@ export default function App() {
   const dispatch = (type, payload) => {
     const action = { id: newActionId(), type, payload, at: nowISO() };
     try {
-      const next = apply(state, action);
+      const next = apply(stateRef.current, action);
       commit({ ...docRef.current, pending: [...docRef.current.pending, action] }, next);
       setError(null);
       return next;
@@ -122,21 +129,24 @@ export default function App() {
   const dot =
     !doc.tracker ? "off" : syncInfo.status === "offline" ? "bad" : doc.pending.length ? "busy" : "ok";
 
-  // A rolling session owns the screen: no masthead, no tabs, just the pads.
-  // MENU leaves the pads for the Missions tab while the session keeps
-  // rolling; the Roll tab's live dot brings the pads back.
+  // The Roll tab IS the deck: no masthead, no tabs, just the pads. With no
+  // session rolling the first tap starts one; MENU leaves the pads for the
+  // Missions tab while a session keeps rolling, and the Roll tab's live dot
+  // brings the pads back.
   const live = openSession(state);
-  if (live && tab === "roll") {
+  if (tab === "roll" && editing === null) {
     return (
       <Pads
         state={state}
         live={live}
+        today={nowISO().slice(0, 10)}
         dispatch={dispatch}
         syncDot={dot}
         error={error}
         clearError={() => setError(null)}
         onExit={() => setTab("missions")}
         onEnd={() => {
+          if (!live) return;
           dispatch("endSession", { sessionId: live.id });
           setEditing(live.id); // straight into notes and corrections
         }}
@@ -179,7 +189,6 @@ export default function App() {
       )}
 
       <main>
-        {tab === "roll" && <Roll state={state} dispatch={dispatch} setEditing={setEditing} />}
         {tab === "missions" && <Missions state={state} dispatch={dispatch} />}
         {tab === "grid" && <Grid state={state} />}
         {tab === "calendar" && <Calendar state={state} dispatch={dispatch} setEditing={setEditing} />}

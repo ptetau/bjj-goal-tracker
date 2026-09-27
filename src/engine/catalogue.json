@@ -1,0 +1,259 @@
+{
+  "templates": [
+    {
+      "key": "fundamentals",
+      "name": "Fundamentals",
+      "type": "growth",
+      "lines": [
+        "Both standing => Collar tie x50",
+        "Collar tie => Front headlock x50",
+        "Front headlock => Takedown x50",
+        "I'm down => Closed guard x50",
+        "Closed guard => Hold x50",
+        "Closed guard => Armbar x50"
+      ]
+    },
+    {
+      "key": "front-headlock",
+      "name": "Front headlock",
+      "type": "growth",
+      "lines": [
+        "Both standing => Front headlock x50",
+        "Front headlock => Hold x50",
+        "Front headlock => Rear body lock x50",
+        "Front headlock => Takedown x50",
+        "Front headlock => Guillotine x50",
+        "Front headlock => Darce x50",
+        "Front headlock => Anaconda x50"
+      ]
+    },
+    {
+      "key": "body-lock",
+      "name": "Body lock",
+      "type": "growth",
+      "lines": [
+        "Both standing => Body lock x50",
+        "Body lock => Hold x50",
+        "Body lock => Rear body lock x50",
+        "Body lock => Takedown x50",
+        "Body lock => Takedown => Ko soto gari x50",
+        "Body lock => Takedown => Ouchi gari x50",
+        "Rear body lock => Back x50"
+      ]
+    },
+    {
+      "key": "single-leg",
+      "name": "Single leg",
+      "type": "growth",
+      "lines": [
+        "Both standing => Single leg x50",
+        "Single leg => Hold x50",
+        "Single leg => Rear body lock x50",
+        "Single leg => Takedown x50",
+        "Single leg => Takedown => Run the pipe x50",
+        "Single leg => Back x50"
+      ]
+    },
+    {
+      "key": "two-on-one",
+      "name": "Two-on-one",
+      "type": "growth",
+      "lines": [
+        "Both standing => Two-on-one x50",
+        "Two-on-one => Hold x50",
+        "Two-on-one => Front headlock x50",
+        "Two-on-one => Rear body lock x50",
+        "Two-on-one => Takedown x50"
+      ]
+    },
+    {
+      "key": "back-attack",
+      "name": "Back attack",
+      "type": "growth",
+      "lines": [
+        "They're down => Seatbelt x50",
+        "Seatbelt => Hold x50",
+        "Seatbelt => Rear naked strangle x50",
+        "Seatbelt => Bow and arrow x50",
+        "Seatbelt => Armbar x50"
+      ]
+    },
+    {
+      "key": "mount-ties",
+      "name": "Mount ties",
+      "type": "growth",
+      "lines": [
+        "They're down => Gift wrap x50",
+        "Gift wrap => Hold x50",
+        "Gift wrap => Back x50",
+        "Crowbar => Back x50",
+        "Shoulder lever => Back x50",
+        "Gift wrap => Armbar x50",
+        "Cross face => Collar strangle x50"
+      ]
+    },
+    {
+      "key": "closed-guard",
+      "name": "Closed guard",
+      "type": "growth",
+      "lines": [
+        "I'm down => Closed guard x50",
+        "Closed guard => Hold x50",
+        "Closed guard => Triangle x50",
+        "Closed guard => Armbar x50",
+        "Closed guard => Seatbelt x50",
+        "Closed guard => Mount => Hip bump sweep x50",
+        "Closed guard => Mount => Flower sweep x50"
+      ]
+    },
+    {
+      "key": "half-guard",
+      "name": "Half guard",
+      "type": "growth",
+      "lines": [
+        "I'm down => Knee shield x50",
+        "Knee shield => Underhook x50",
+        "Underhook => Hold x50",
+        "Underhook => Seatbelt x50",
+        "Underhook => Mount => Old school sweep x50",
+        "Underhook => Side control x50"
+      ]
+    },
+    {
+      "key": "passing",
+      "name": "Passing",
+      "type": "growth",
+      "lines": [
+        "They're down => Double underhooks x50",
+        "Double underhooks => Hold x50",
+        "Double underhooks => Side control x50",
+        "Double underhooks => Mount x50",
+        "They're down => Body lock x50",
+        "Body lock => Side control x50"
+      ]
+    },
+    {
+      "key": "standing",
+      "name": "Standing game",
+      "type": "growth",
+      "lines": [
+        "Both standing => Collar tie x50",
+        "Collar tie => Two-on-one x50",
+        "Collar tie => Front headlock x50",
+        "Front headlock => Takedown x50",
+        "Both standing => Single leg x50",
+        "Single leg => Takedown x50"
+      ]
+    },
+    {
+      "key": "leg-entanglement",
+      "name": "Leg entanglements",
+      "type": "growth",
+      "lines": [
+        "I'm down => SLX x50",
+        "SLX => Hold x50",
+        "SLX => Saddle x50",
+        "Saddle => Heel hook x50",
+        "Outside ashi => Heel hook x50",
+        "50/50 => Heel hook x50"
+      ]
+    },
+    {
+      "key": "dlr",
+      "name": "De la Riva",
+      "type": "growth",
+      "lines": [
+        "I'm down => DLR hook x50",
+        "DLR hook => Hold x50",
+        "DLR hook => Seatbelt x50",
+        "DLR hook => Single leg x50",
+        "DLR hook => Mount x50"
+      ]
+    },
+    {
+      "key": "rdlr",
+      "name": "Reverse De la Riva",
+      "type": "growth",
+      "lines": [
+        "I'm down => RDLR hook x50",
+        "RDLR hook => Hold x50",
+        "RDLR hook => Seatbelt x50",
+        "RDLR hook => Mount x50",
+        "RDLR hook => Kneebar x50"
+      ]
+    },
+    {
+      "key": "collar-sleeve",
+      "name": "Collar sleeve and lasso",
+      "type": "growth",
+      "lines": [
+        "I'm down => Collar and sleeve x50",
+        "Collar and sleeve => Lasso x50",
+        "Collar and sleeve => Triangle hub x50",
+        "Lasso => Omoplata x50",
+        "Triangle hub => Triangle x50"
+      ]
+    },
+    {
+      "key": "butterfly-k",
+      "name": "Butterfly and K guard",
+      "type": "growth",
+      "lines": [
+        "I'm down => Butterfly hooks x50",
+        "Butterfly hooks => Hold x50",
+        "Butterfly hooks => Mount x50",
+        "Butterfly hooks => SLX x50",
+        "K guard => Saddle x50",
+        "K guard => Back x50"
+      ]
+    },
+    {
+      "key": "triangle-hub",
+      "name": "Triangle hub",
+      "type": "growth",
+      "lines": [
+        "Closed guard => Triangle hub x50",
+        "Triangle hub => Hold x50",
+        "Triangle hub => Triangle x50",
+        "Triangle hub => Armbar x50",
+        "Triangle hub => Omoplata hub x50",
+        "Omoplata hub => Omoplata x50"
+      ]
+    }
+  ],
+  "control": {
+    "weak": [
+      "Collar tie",
+      "Two-on-one",
+      "Underhook",
+      "Collar and sleeve",
+      "Lasso",
+      "DLR hook",
+      "RDLR hook",
+      "Butterfly hooks",
+      "K guard",
+      "Knee shield",
+      "SLX",
+      "50/50",
+      "Cross face"
+    ],
+    "strong": [
+      "Front headlock",
+      "Body lock",
+      "Single leg",
+      "Double underhooks",
+      "Closed guard",
+      "Saddle",
+      "Outside ashi",
+      "Triangle hub",
+      "Omoplata hub"
+    ],
+    "dominant": [
+      "Rear body lock",
+      "Seatbelt",
+      "Gift wrap",
+      "Crowbar",
+      "Shoulder lever"
+    ]
+  }
+}

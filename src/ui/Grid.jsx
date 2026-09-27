@@ -1,10 +1,13 @@
-// The sharpness grid: one table per list, rows are active items, columns
-// the sessions of the last three weeks. Cells show hits and tries both —
-// on a growth list, going for it IS the win — and each row carries its
-// hit- and try-consistency over the window, plainly computable from the
-// cells a coach is looking at.
+// The sharpness grid: one table per kind — A your tokui waza, B kaizen,
+// the same two banks as the deck — rows are the live items, columns the
+// sessions of the last three weeks. Cells show hits and tries both — on a
+// kaizen list, going for it IS the win — and each row carries its hit- and
+// try-consistency over the window, plainly computable from the cells a
+// coach is looking at. Both grids are always drawn: an empty bank is one
+// row that says so, an empty window is a grid with no session columns.
 
 import React from "react";
+import { liveBanks } from "../engine/actions.js";
 import { sharpnessGrid, windowSessions, WINDOW_DAYS } from "../engine/stats.js";
 import { itemTitle } from "../engine/parse.js";
 import { todayISO } from "../app/store.js";
@@ -15,82 +18,100 @@ const dayLabel = (iso) => `${+iso.slice(8, 10)}/${+iso.slice(5, 7)}`;
 // rows are comparable at a glance.
 const heat = (pct) => (pct === null ? "" : pct >= 75 ? "hot" : pct >= 40 ? "warm" : pct > 0 ? "cool" : "cold");
 
-function ListGrid({ list, state, today }) {
-  const { sessions, rows } = sharpnessGrid(state, list, today);
-  if (rows.length === 0) return null;
-  const growth = list.type === "growth";
+const BANKS = {
+  tokui: { title: "Tokui waza", empty: "Nothing here yet — add your tokui waza in Missions." },
+  growth: { title: "Kaizen", empty: "Nothing here yet — pick what you're working on in Missions." },
+};
+
+function BankGrid({ bank, state, today }) {
+  const { sessions, rows } = sharpnessGrid(state, bank, today);
+  const growth = bank.type === "growth";
+  const width = sessions.length + 3;
 
   return (
     <div className="card grid-card">
       <h3>
-        {list.name} <span className={`list-tag list-${list.type}`}>{list.type}</span>
+        {BANKS[bank.type].title} <span className={`list-tag list-${bank.type}`}>{bank.type === "growth" ? "kaizen" : "tokui"}</span>
       </h3>
-      {sessions.length === 0 ? (
-        <p className="hint">No sessions in the last {WINDOW_DAYS} days — the window is empty, not you.</p>
-      ) : (
-        <div className="grid-scroll">
-          <table className="grid">
-            <thead>
-              <tr>
-                <th className="grid-item-col">item</th>
-                {sessions.map((s) => (
-                  <th key={s.id}>{dayLabel(s.date)}</th>
-                ))}
-                <th className="grid-pct">hit</th>
-                <th className="grid-pct">try</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.item.id}>
-                  <th className="grid-item-col">{itemTitle(r.item)}</th>
-                  {r.cells.map((c, i) => (
-                    <td key={sessions[i].id} className={c ? (c.hits > 0 ? "cell-hit" : "cell-try") : "cell-none"}>
-                      {c ? (
-                        <>
-                          <b>{c.hits}</b>
-                          <i>{c.tries}</i>
-                        </>
-                      ) : (
-                        "·"
-                      )}
-                    </td>
-                  ))}
-                  {/* Growth lists lead with try-consistency: the primary chip colors by what the list is for. */}
-                  <td className={`grid-pct ${!growth ? "lead " + heat(r.hitPct) : ""}`}>
-                    {r.hitPct === null ? "—" : `${r.hitIn}/${sessions.length}`}
-                  </td>
-                  <td className={`grid-pct ${growth ? "lead " + heat(r.triedPct) : ""}`}>
-                    {r.triedPct === null ? "—" : `${r.triedIn}/${sessions.length}`}
-                  </td>
-                </tr>
+      <div className="grid-scroll">
+        <table className="grid">
+          <thead>
+            <tr>
+              <th className="grid-item-col">item</th>
+              {sessions.map((s) => (
+                <th key={s.id}>{dayLabel(s.date)}</th>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              <th className="grid-pct">hit</th>
+              <th className="grid-pct">try</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr className="grid-empty">
+                <td colSpan={width}>{BANKS[bank.type].empty}</td>
+              </tr>
+            )}
+            {rows.map((r) => (
+              <tr key={r.item.id}>
+                <th className="grid-item-col">{itemTitle(r.item)}</th>
+                {r.cells.map((c, i) => (
+                  <td key={sessions[i].id} className={c ? (c.hits > 0 ? "cell-hit" : "cell-try") : "cell-none"}>
+                    {c ? (
+                      <>
+                        <b>{c.hits}</b>
+                        <i>{c.tries}</i>
+                      </>
+                    ) : (
+                      "·"
+                    )}
+                  </td>
+                ))}
+                {/* Kaizen leads with try-consistency: the lead chip colours by what the bank is for. */}
+                <td className={`grid-pct ${!growth ? "lead " + heat(r.hitPct) : ""}`}>
+                  {r.hitPct === null ? "—" : `${r.hitIn}/${sessions.length}`}
+                </td>
+                <td className={`grid-pct ${growth ? "lead " + heat(r.triedPct) : ""}`}>
+                  {r.triedPct === null ? "—" : `${r.triedIn}/${sessions.length}`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
 export default function Grid({ state }) {
   const today = todayISO();
-  const lists = state.lists.filter((l) => !l.archivedAt && l.items.some((it) => !it.retiredAt));
   const n = windowSessions(state, today).length;
 
   return (
     <section aria-label="Sharpness">
       <p className="week-line">
-        Last {WINDOW_DAYS} days: <strong>{n}</strong> session{n === 1 ? "" : "s"}. Cells read{" "}
-        <b>hits</b>
-        <i className="legend-try">tries</i>; the hit/try columns count sessions where the item landed
-        / was attempted.
+        Last {WINDOW_DAYS} days: <strong>{n}</strong> session{n === 1 ? "" : "s"}, one column each. The hit / try columns count the sessions an item landed / was tried in.
       </p>
-      {lists.length === 0 ? (
-        <p className="empty">No active missions to measure yet.</p>
-      ) : (
-        lists.map((l) => <ListGrid key={l.id} list={l} state={state} today={today} />)
-      )}
+      <div className="legend grid-key" aria-label="Grid key">
+        <span>
+          <i className="k-hit" aria-hidden="true" /> <b>2</b>
+          <small>3</small> hits, tries
+        </span>
+        <span>
+          <i className="k-try" aria-hidden="true" /> tried, no hit
+        </span>
+        <span>
+          <i className="k-none" aria-hidden="true" /> not attempted
+        </span>
+        <span>
+          <i className="k-hot" aria-hidden="true" /> sharp
+        </span>
+        <span>
+          <i className="k-cold" aria-hidden="true" /> cold
+        </span>
+      </div>
+      {liveBanks(state).map((bank) => (
+        <BankGrid key={bank.type} bank={bank} state={state} today={today} />
+      ))}
     </section>
   );
 }

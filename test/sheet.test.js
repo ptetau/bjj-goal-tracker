@@ -100,8 +100,8 @@ describe("catalogueToRows", () => {
   it("writes one row per line with the derived rung and control change, and one row per rank", () => {
     const { graph, ranks } = catalogueToRows({ templates: DEFAULT_TEMPLATES.slice(0, 1), control: CONTROL });
     expect(graph[0]).toEqual(["Set", "Kind", "From", "To", "Name", "Target", "Rung", "Control change"]);
-    expect(graph[1]).toEqual(["Fundamentals", "tokui", "Both standing", "Collar tie", "", "", "make", "up"]);
-    expect(graph[3]).toEqual(["Fundamentals", "tokui", "Front headlock", "Takedown", "", "25", "profit", "phase"]);
+    expect(graph[1]).toEqual(["Fundamentals", "kaizen", "Both standing", "Collar tie", "", "50", "make", "up"]);
+    expect(graph[3]).toEqual(["Fundamentals", "kaizen", "Front headlock", "Takedown", "", "50", "profit", "phase"]);
     expect(ranks[0]).toEqual(["Connection", "Rank (weak / strong / dominant)"]);
     expect(ranks).toContainEqual(["Front headlock", "strong"]);
     expect(ranks).toHaveLength(1 + CONTROL.weak.length + CONTROL.strong.length + CONTROL.dominant.length);

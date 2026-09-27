@@ -116,6 +116,15 @@ describe("live sessions and taps", () => {
     expect(() => apply(live, act("startSession"))).toThrow(/already rolling/);
   });
 
+  it("starts a session on an earlier day when asked — the deck's calendar key — never a later one", () => {
+    const past = apply(base, act("startSession", { date: "2026-08-20" }));
+    expect(openSession(past)).toMatchObject({ date: "2026-08-20", endedAt: null });
+    expect(openSession(past).startedAt).toBe(AT); // when it was really started
+    expect(() => apply(base, act("startSession", { date: "2026-09-01" }))).toThrow(/after today/);
+    expect(() => apply(base, act("startSession", { date: "last tuesday" }))).toThrow(/bad session date/);
+    expect(openSession(apply(base, act("startSession", { date: "2026-08-29" }))).date).toBe("2026-08-29");
+  });
+
   it("taps tally; a hit implies the attempt", () => {
     let s = apply(live, act("tap", { sessionId: sid, itemId: strangle.id, kind: "hit" }));
     s = apply(s, act("tap", { sessionId: sid, itemId: strangle.id, kind: "try" }));

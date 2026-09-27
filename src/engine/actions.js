@@ -170,11 +170,16 @@ const handlers = {
   },
 
   // --- sessions ------------------------------------------------------------
-  startSession(s, _p, at, id) {
+  // `date` is optional: the deck's calendar key starts a session on an
+  // earlier day (never a later one); `startedAt` stays the real moment.
+  startSession(s, { date } = {}, at, id) {
     if (openSession(s)) fail("a session is already rolling");
+    const today = dateOf(at);
+    if (date != null && !isISODate(date)) fail(`bad session date: ${date}`);
+    if (date != null && date > today) fail(`session date ${date} is after today`);
     const session = {
       id: claimId(s, id),
-      date: dateOf(at),
+      date: date || today,
       startedAt: at,
       endedAt: null,
       note: "",
