@@ -186,3 +186,18 @@ describe("ranks the coach can change", () => {
     expect(ladderGraph(sets, flipped).edges.get("Knee shield")[0].climb).toBe("down");
   });
 });
+
+describe("leg entanglements: where I face and which hip their leg crosses", () => {
+  it("is a two-by-two: four named cells, every one a connection, the old names gone", async () => {
+    const { ENTANGLEMENTS, CONNECTIONS, isConnection } = await import("../src/engine/ladder.js");
+    expect(ENTANGLEMENTS.map((e) => [e.label, e.facing, e.hip])).toEqual([
+      ["Saddle", "inside", "inside"],
+      ["SLX", "inside", "outside"],
+      ["50/50", "outside", "inside"],
+      ["Outside ashi", "outside", "outside"],
+    ]);
+    for (const e of ENTANGLEMENTS) expect(isConnection(e.label), e.label).toBe(true);
+    for (const old of ["Inside entanglement", "Outside entanglement", "Open entanglement", "Closed entanglement"])
+      expect(CONNECTIONS).not.toContain(old);
+  });
+});

@@ -52,11 +52,24 @@ export const CONNECTIONS = [
   "Lasso",
   "Triangle hub",
   "Omoplata hub",
-  // leg entanglements
-  "Inside entanglement",
-  "Outside entanglement",
-  "Open entanglement",
-  "Closed entanglement",
+  // leg entanglements (the four cells of ENTANGLEMENTS, below)
+  "Saddle",
+  "SLX",
+  "50/50",
+  "Outside ashi",
+];
+
+// A leg entanglement is two facts: where my chest points (inside, toward
+// their centreline, or outside, away from it) and which of my hips their
+// entangled leg crosses (inside, the hip nearer their centreline, or
+// outside, the far one). Two by two, four cells, each with the gym's
+// name. What I do from a cell (heel hook, instep, a triangle or not) is a
+// finish or a named step, not the cell.
+export const ENTANGLEMENTS = [
+  { label: "Saddle", facing: "inside", hip: "inside" },
+  { label: "SLX", facing: "inside", hip: "outside" },
+  { label: "50/50", facing: "outside", hip: "inside" },
+  { label: "Outside ashi", facing: "outside", hip: "outside" },
 ];
 
 export const FINISHES = [
@@ -92,8 +105,8 @@ export const HOLD = "Hold";
 // ties are a finish waiting to happen. Disconnected sits below all of them;
 // a finish is not a rank but a phase change. One table, easy to argue with.
 export const CONTROL = {
-  weak: ["Collar tie", "Two-on-one", "Underhook", "Collar and sleeve", "Lasso", "DLR hook", "RDLR hook", "Butterfly hooks", "K guard", "Knee shield", "Open entanglement", "Cross face"],
-  strong: ["Front headlock", "Body lock", "Single leg", "Double underhooks", "Closed guard", "Inside entanglement", "Outside entanglement", "Closed entanglement", "Triangle hub", "Omoplata hub"],
+  weak: ["Collar tie", "Two-on-one", "Underhook", "Collar and sleeve", "Lasso", "DLR hook", "RDLR hook", "Butterfly hooks", "K guard", "Knee shield", "SLX", "50/50", "Cross face"],
+  strong: ["Front headlock", "Body lock", "Single leg", "Double underhooks", "Closed guard", "Saddle", "Outside ashi", "Triangle hub", "Omoplata hub"],
   dominant: ["Rear body lock", "Seatbelt", "Gift wrap", "Crowbar", "Shoulder lever"],
 };
 

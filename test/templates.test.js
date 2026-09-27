@@ -114,12 +114,12 @@ describe("the catalogue: sets plus ranks, synced from the coach's sheets", () =>
     "Front headlock,tokui,Front headlock,Darce,,25,profit,phase",
     "Front headlock,tokui,Front headlock,Takedown,Snap down,25,profit,phase",
     "Front headlock,tokui,Front headlock,Hold,,,,",
-    "Leg entanglements,kaizen,I'm down,Inside entanglement,,50,,",
-    "Leg entanglements,kaizen,Inside entanglement,Hold,,50,,",
-    "Leg entanglements,kaizen,Inside entanglement,Heel hook,,50,,",
-    "Leg entanglements,kaizen,Inside entanglement,Outside entanglement,,50,,",
+    "Leg entanglements,kaizen,I'm down,SLX,,50,,",
+    "Leg entanglements,kaizen,SLX,Hold,,50,,",
+    "Leg entanglements,kaizen,SLX,Heel hook,,50,,",
+    "Leg entanglements,kaizen,SLX,Saddle,,50,,",
   ].join("\n");
-  const ranksCsv = "Connection,Rank (weak / strong / dominant)\nFront headlock,dominant\nInside entanglement,weak\nOutside entanglement,strong";
+  const ranksCsv = "Connection,Rank (weak / strong / dominant)\nFront headlock,dominant\nSLX,weak\nSaddle,strong";
   const urls = { graph: "https://sheet.test/graph.csv", ranks: "https://sheet.test/ranks.csv" };
   const fetchText = async (url) => {
     if (url === urls.graph) return graphCsv;
@@ -143,7 +143,7 @@ describe("the catalogue: sets plus ranks, synced from the coach's sheets", () =>
     const templates = await store.list();
     expect(templates.map((t) => [t.key, t.type])).toEqual([["front-headlock", "tokui"], ["leg-entanglements", "growth"]]);
     expect(templates[0].lines).toBe("Both standing => Front headlock\nFront headlock => Darce x25\nFront headlock => Takedown => Snap down x25\nFront headlock => Hold");
-    expect(await store.control()).toEqual({ weak: ["Inside entanglement"], strong: ["Outside entanglement"], dominant: ["Front headlock"] });
+    expect(await store.control()).toEqual({ weak: ["SLX"], strong: ["Saddle"], dominant: ["Front headlock"] });
   });
 
   it("does not fetch on a wrong secret, and keeps the catalogue when a sheet is unreadable", async () => {
@@ -158,7 +158,7 @@ describe("the catalogue: sets plus ranks, synced from the coach's sheets", () =>
     const broken = async (url) => (url === urls.ranks ? "Connection,Rank\nFront headlock,huge" : fetchText(url));
     await expect(syncFromSheets({ store, secret: "coach-secret", urls, fetchText: broken })).rejects.toThrow(/ranks row 2/);
     expect((await store.list()).map((t) => t.key)).toEqual(["front-headlock", "leg-entanglements"]);
-    expect(await store.control()).toEqual({ weak: ["Inside entanglement"], strong: ["Outside entanglement"], dominant: ["Front headlock"] });
+    expect(await store.control()).toEqual({ weak: ["SLX"], strong: ["Saddle"], dominant: ["Front headlock"] });
   });
 
   it("refuses to sync when no sheet is configured", async () => {

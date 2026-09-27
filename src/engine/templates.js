@@ -133,12 +133,12 @@ Single leg => Takedown x50`,
     key: "leg-entanglement",
     name: "Leg entanglements",
     type: "growth",
-    lines: `I'm down => Inside entanglement x50
-Inside entanglement => Hold x50
-Inside entanglement => Outside entanglement x50
-Outside entanglement => Heel hook x50
-Inside entanglement => Heel hook x50
-Closed entanglement => Heel hook x50`,
+    lines: `I'm down => SLX x50
+SLX => Hold x50
+SLX => Saddle x50
+Saddle => Heel hook x50
+Outside ashi => Heel hook x50
+50/50 => Heel hook x50`,
   },
   {
     key: "dlr",
@@ -177,8 +177,8 @@ Triangle hub => Triangle x50`,
     lines: `I'm down => Butterfly hooks x50
 Butterfly hooks => Hold x50
 Butterfly hooks => Mount x50
-Butterfly hooks => Inside entanglement x50
-K guard => Inside entanglement x50
+Butterfly hooks => SLX x50
+K guard => Saddle x50
 K guard => Back x50`,
   },
   {
