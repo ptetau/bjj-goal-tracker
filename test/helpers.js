@@ -75,7 +75,8 @@ export function actionFromSeed(state, { op, a, b, c }, id) {
       return targeted.length ? act("startNextLap", { itemId: pick(targeted, a).id }) : null;
     }
     case 7:
-      return open ? null : act("startSession");
+      // half the time the deck's calendar key: a session on an earlier day
+      return open ? null : act("startSession", b % 2 ? { date: addDays(BASE_DAY, c - (b % 12)) } : {});
     case 8:
       return open ? act("endSession", { sessionId: open.id }) : null;
     case 9:

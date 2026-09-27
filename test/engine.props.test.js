@@ -119,6 +119,17 @@ describe("the action log, under arbitrary legal histories", () => {
   });
 });
 
+describe("sessions, under arbitrary legal histories", () => {
+  it("a session started from the deck is never dated after the day it was started", () => {
+    fc.assert(
+      fc.property(fc.array(arbOpSeed, { maxLength: 60 }), (seeds) => {
+        const { state } = playSeeds(initState(), seeds);
+        for (const x of state.sessions) if (x.startedAt) expect(x.date <= x.startedAt.slice(0, 10)).toBe(true);
+      })
+    );
+  });
+});
+
 describe("pad banks, under arbitrary legal histories", () => {
   it("show every live item exactly once, in its own list's bank, and nothing retired or archived", () => {
     fc.assert(fc.property(arbSeeds, (seeds) => {

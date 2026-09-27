@@ -1,5 +1,5 @@
 // Starter mission sets: the shipped defaults must be valid app content
-// (every line parses, sane sizes, growth items carrying the default x50),
+// (every line parses, sane sizes, every set a kaizen set carrying x50),
 // and the server-side store must seed them, serve them, and let only the
 // holder of the admin secret replace them — coach-owned by design, before
 // accounts exist.
@@ -62,19 +62,12 @@ describe("DEFAULT_TEMPLATES content", () => {
       for (const item of parseLines(t.lines)) expect(rungOf(item.position, item.move), `${t.key}: ${item.position} => ${item.move}`).not.toBe("other");
   });
 
-  it("growth templates default every item to a high x50 target", () => {
-    for (const t of DEFAULT_TEMPLATES.filter((x) => x.type === "growth"))
-      for (const item of parseLines(t.lines)) expect(item.target).toBe(50);
+  it("every set is a kaizen set: tokui waza is yours to add, there are no presets for it", () => {
+    for (const t of DEFAULT_TEMPLATES) expect(t.type, t.key).toBe("growth");
   });
 
-  it("tokui templates put targets on finishes, not on positional work", () => {
-    // Concretely: at least one targeted item per tokui set, never all of them.
-    for (const t of DEFAULT_TEMPLATES.filter((x) => x.type === "tokui")) {
-      const items = parseLines(t.lines);
-      const targeted = items.filter((i) => i.target !== null);
-      expect(targeted.length).toBeGreaterThanOrEqual(1);
-      expect(targeted.length).toBeLessThan(items.length);
-    }
+  it("every set line carries the high x50 target: fifty of the new thing is the point", () => {
+    for (const t of DEFAULT_TEMPLATES) for (const item of parseLines(t.lines)) expect(item.target, `${t.key}: ${item.position} => ${item.move}`).toBe(50);
   });
 });
 

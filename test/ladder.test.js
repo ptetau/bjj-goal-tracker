@@ -108,7 +108,7 @@ describe("ladderGraph(templates): the graph we built, as the sheet offers it", (
     const g = ladderGraph(DEFAULT_TEMPLATES);
     const takedowns = g.edges.get("Front headlock").filter((e) => e.to === "Takedown");
     expect(takedowns).toHaveLength(1); // in "fundamentals", "front-headlock" and "standing"
-    expect(takedowns[0].target).toBe(25);
+    expect(takedowns[0].target).toBe(50);
     for (const [from, edges] of g.edges) for (const e of edges) expect(e.rung).toBe(rungOf(from, e.to));
   });
 

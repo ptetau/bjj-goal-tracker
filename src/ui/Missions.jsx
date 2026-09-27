@@ -83,7 +83,7 @@ const KIND = {
   tokui: {
     title: "Tokui waza",
     tag: "tokui · sharpen",
-    blurb: "Your special techniques: a submission, a guard, a sweep, a takedown, maybe one to three more. Hit them every session.",
+    blurb: "Your special techniques: a submission, a guard, a sweep, a takedown, maybe one to three more. Hit them every session. No presets — these are yours to add.",
     defaultName: "My tokui waza",
     defaultTarget: 25,
   },
@@ -464,7 +464,8 @@ function List({ list, state, dispatch }) {
 }
 
 // One slot per kind: the list (if any), one Add button, and the sheet it
-// opens. An empty slot also offers the coach's sets, trimmed to the cap.
+// opens. An empty kaizen slot also offers the coach's sets, trimmed to the
+// cap; tokui waza has no presets — it is yours to add.
 function Slot({ type, state, dispatch, templates, control }) {
   const kind = KIND[type];
   const lists = state.lists.filter((l) => l.type === type && !l.archivedAt);
@@ -486,7 +487,7 @@ function Slot({ type, state, dispatch, templates, control }) {
       {lists.map((l) => (
         <List key={l.id} list={l} state={state} dispatch={dispatch} />
       ))}
-      {!list && (
+      {!list && type === "growth" && (
         <div className="chips-row sets">
           {templates
             .filter((t) => t.type === type)
